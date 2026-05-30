@@ -1,0 +1,13 @@
+{
+  "name": "comfyui-model-gallery-dev",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only test harness for comfyui-model-gallery. Nothing here ships to users.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.7"
+  }
+}

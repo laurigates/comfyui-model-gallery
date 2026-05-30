@@ -1,0 +1,53 @@
+[project]
+name = "comfyui-model-gallery"
+description = "Touch-first card-grid picker with preview thumbnails for the folder-backed model combos (LoRA, checkpoint, VAE, ControlNet, UNet, CLIP, upscale)."
+version = "0.1.0"
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Lauri Gates" }]
+keywords = ["comfyui", "comfyui-nodes", "ui", "picker", "mobile", "touch"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: JavaScript",
+    "Topic :: Multimedia :: Graphics",
+]
+
+# Floor tied to widget.onPointerDown availability. Backend uses ComfyUI-bundled libs only (aiohttp, folder_paths, server).
+dependencies = [
+    "comfyui-frontend-package>=1.40",
+]
+
+[project.urls]
+Repository = "https://github.com/laurigates/comfyui-model-gallery"
+Issues = "https://github.com/laurigates/comfyui-model-gallery/issues"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11",
+    "pytest>=8",
+    "pre-commit>=4",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# importlib mode avoids pytest treating the pack-root __init__.py
+# (with its relative import) as a discovered package.
+addopts = "--import-mode=importlib"
+
+[tool.comfy]
+PublisherId = "laurigates"
+DisplayName = "Model Gallery"
+Icon = ""
