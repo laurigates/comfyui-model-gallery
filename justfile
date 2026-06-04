@@ -32,3 +32,13 @@ test:
 # Lint + test in one shot.
 [group: "quality"]
 check: lint test
+
+##########
+# Documentation artifacts
+##########
+
+# Regenerate docs/picker.png via the containerized screenshot generator.
+[group: "docs"]
+screenshots:
+    docker build -f screenshots/Dockerfile -t comfyui-model-gallery-screenshots .
+    docker run --rm -v "$(pwd)/docs:/out" comfyui-model-gallery-screenshots

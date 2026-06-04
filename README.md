@@ -8,6 +8,12 @@ Touch-first card-grid picker with preview thumbnails for the folder-backed model
 > touch-friendly HTML modals that replace clunky native LiteGraph controls,
 > detected by widget name, additive and non-clobbering.
 
+![Model gallery picker](docs/picker.png)
+
+*The card-grid picker over a `ckpt_name` combo: subfolder filter chips,
+fuzzy name filter, and the current value highlighted. (Screenshot uses
+placeholder model names.)*
+
 ## Install
 
 ```sh

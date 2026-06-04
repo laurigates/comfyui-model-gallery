@@ -1,0 +1,9 @@
+{
+  "name": "comfyui-model-gallery-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Playwright driver for generating README screenshots of comfyui-model-gallery.",
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}
