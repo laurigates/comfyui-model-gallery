@@ -19,8 +19,10 @@ and `modal-fuzzy.js` (`fuzzyScore` / `fuzzyRank` / `highlightMatches`).
 | Path | Purpose |
 |------|---------|
 | `__init__.py` | Loader stub. Imports node mappings from the backend module; exports `WEB_DIRECTORY`. |
-| `model_gallery.py` | Node + HTTP endpoints. Bundled libs only; arbitrary-path endpoints gate on an extension whitelist. |
-| `web/js/model-gallery.js` | The extension: widget interception + modal. |
+| `model_gallery.py` | Node + HTTP endpoints (`/list`, `/meta`, `/thumb` stub). Bundled libs only; arbitrary-path endpoints gate on an extension whitelist; `/meta` resolves paths only via `folder_paths`. |
+| `web/js/model-gallery.js` | The extension: widget interception + modal + corpus/metadata annotation. |
+| `web/js/model-corpus.js` | Pure corpus helpers (`compileCorpus`/`safeRegex`/`lookup`/`corpusFields`/`formatTooltip`). Filename → model info. |
+| `web/data/models.json` | The model corpus: base-architecture families + notable models, matched by filename pattern. Data-only; edit to extend coverage. |
 | `web/js/modal-shell.js` | Reusable modal dialog (copied from gallery-loader). |
 | `web/js/modal-fuzzy.js` | fzf-lite fuzzy matcher (copied from gallery-loader). |
 | `pyproject.toml` | Comfy Registry metadata. `PublisherId` + `version` are the fields you touch. |

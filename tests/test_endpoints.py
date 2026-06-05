@@ -8,13 +8,25 @@ a fake aiohttp request (also from conftest).
 from __future__ import annotations
 
 import asyncio
+import json
 import pathlib
 import re
+import struct
 
 import folder_paths
 from aiohttp.web import Request
 
 import model_gallery as pack
+
+
+def _write_safetensors(path, header_obj) -> None:
+    """Write a minimal safetensors file: u64 header length + JSON + payload."""
+    raw = json.dumps(header_obj).encode("utf-8")
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<Q", len(raw)))
+        fh.write(raw)
+        fh.write(b"\x00\x00\x00\x00")  # dummy tensor bytes — never read
+
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 JS_SRC = (ROOT / "web" / "js" / "model-gallery.js").read_text()
@@ -153,6 +165,153 @@ def test_allowed_extensions_whitelist_present():
     # The security perimeter for the future /thumb endpoint must stay defined.
     assert ".png" in pack.ALLOWED_EXTENSIONS
     assert ".safetensors" not in pack.ALLOWED_EXTENSIONS
+
+
+# ---------------------------------------------------------------------------
+# Embedded-metadata helpers (safetensors header read)
+# ---------------------------------------------------------------------------
+
+
+def test_read_safetensors_metadata_extracts_metadata(tmp_path):
+    f = tmp_path / "lora.safetensors"
+    _write_safetensors(f, {"__metadata__": {"ss_network_dim": "32"}, "t": {}})
+    assert pack._read_safetensors_metadata(str(f)) == {"ss_network_dim": "32"}
+
+
+def test_read_safetensors_metadata_empty_when_no_metadata_key(tmp_path):
+    f = tmp_path / "ckpt.safetensors"
+    _write_safetensors(f, {"some.tensor": {"dtype": "F16"}})
+    assert pack._read_safetensors_metadata(str(f)) == {}
+
+
+def test_read_safetensors_metadata_none_on_truncated_header(tmp_path):
+    f = tmp_path / "short.safetensors"
+    f.write_bytes(b"\x01\x02")  # fewer than 8 length bytes
+    assert pack._read_safetensors_metadata(str(f)) is None
+
+
+def test_read_safetensors_metadata_none_on_oversize_header(tmp_path):
+    f = tmp_path / "huge.safetensors"
+    f.write_bytes(struct.pack("<Q", pack.SAFETENSORS_HEADER_MAX + 1))
+    assert pack._read_safetensors_metadata(str(f)) is None
+
+
+def test_read_safetensors_metadata_none_on_bad_json(tmp_path):
+    f = tmp_path / "garbage.safetensors"
+    raw = b"this is not json"
+    f.write_bytes(struct.pack("<Q", len(raw)) + raw)
+    assert pack._read_safetensors_metadata(str(f)) is None
+
+
+def test_friendly_base_maps_known_architectures():
+    assert pack._friendly_base("stable-diffusion-xl-v1-base/lora") == "SDXL"
+    assert pack._friendly_base(None, "sdxl_base_v1-0") == "SDXL"
+    assert pack._friendly_base("flux-1-dev") == "Flux.1"
+    assert pack._friendly_base(None, "sd_v1") == "SD 1.5"
+
+
+def test_friendly_base_falls_back_to_raw_then_none():
+    assert pack._friendly_base("some-future-model") == "some-future-model"
+    assert pack._friendly_base(None, None) is None
+
+
+def test_top_tags_aggregates_and_sorts_by_frequency():
+    raw = json.dumps({"ds1": {"cat": 3, "dog": 1}, "ds2": {"dog": 5, "  ": 9}})
+    # dog 6 > cat 3; the whitespace-only tag is dropped.
+    assert pack._top_tags(raw) == ["dog", "cat"]
+
+
+def test_top_tags_empty_on_malformed():
+    assert pack._top_tags("not json") == []
+    assert pack._top_tags(None) == []
+    assert pack._top_tags(json.dumps(["not", "a", "dict"])) == []
+
+
+def test_curate_metadata_pulls_high_signal_keys():
+    out = pack._curate_metadata(
+        {
+            "modelspec.architecture": "stable-diffusion-xl-v1-base/lora",
+            "modelspec.title": "My LoRA",
+            "ss_network_module": "networks.lora",
+            "ss_network_dim": "32",
+            "ss_network_alpha": "16",
+            "ss_tag_frequency": json.dumps({"d": {"trigger_word": 10}}),
+        }
+    )
+    assert out["base"] == "SDXL"
+    assert out["title"] == "My LoRA"
+    assert out["rank"] == "32"
+    assert out["alpha"] == "16"
+    assert out["tags"] == ["trigger_word"]
+
+
+# ---------------------------------------------------------------------------
+# /model_gallery/meta endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_meta_missing_params_is_400():
+    assert _call(pack.model_meta).status == 400
+    assert _call(pack.model_meta, category="loras").status == 400
+
+
+def test_meta_unknown_category_is_400():
+    resp = _call(pack.model_meta, category="../../etc", name="x.safetensors")
+    assert resp.status == 400
+    assert "unknown category" in resp.json_body["error"]
+
+
+def test_meta_not_found_is_404():
+    folder_paths.get_full_path = lambda category, name: None
+    resp = _call(pack.model_meta, category="loras", name="missing.safetensors")
+    assert resp.status == 404
+    assert resp.json_body["ok"] is False
+
+
+def test_meta_unsupported_format_reports_supported_false(tmp_path):
+    f = tmp_path / "upscaler.pth"
+    f.write_bytes(b"\x00")
+    folder_paths.get_full_path = lambda category, name: str(f)
+    resp = _call(pack.model_meta, category="upscale_models", name="upscaler.pth")
+    assert resp.status == 200
+    assert resp.json_body["ok"] is True
+    assert resp.json_body["supported"] is False
+    assert resp.json_body["meta"] == {}
+
+
+def test_meta_returns_curated_metadata_for_safetensors(tmp_path):
+    pack._META_CACHE.clear()
+    f = tmp_path / "lora.safetensors"
+    _write_safetensors(
+        f,
+        {
+            "__metadata__": {
+                "modelspec.architecture": "stable-diffusion-xl-v1-base/lora",
+                "ss_network_dim": "64",
+            }
+        },
+    )
+    folder_paths.get_full_path = lambda category, name: str(f)
+    resp = _call(pack.model_meta, category="loras", name="lora.safetensors")
+    assert resp.status == 200
+    assert resp.json_body["supported"] is True
+    assert resp.json_body["meta"]["base"] == "SDXL"
+    assert resp.json_body["meta"]["rank"] == "64"
+
+
+def test_meta_caches_on_path_mtime_size(tmp_path):
+    pack._META_CACHE.clear()
+    f = tmp_path / "cached.safetensors"
+    _write_safetensors(f, {"__metadata__": {"ss_network_dim": "8"}})
+    folder_paths.get_full_path = lambda category, name: str(f)
+
+    _call(pack.model_meta, category="loras", name="cached.safetensors")
+    keys = list(pack._META_CACHE)
+    assert len(keys) == 1
+    # Second call hits the cache (no new entry, same curated result).
+    resp = _call(pack.model_meta, category="loras", name="cached.safetensors")
+    assert list(pack._META_CACHE) == keys
+    assert resp.json_body["meta"]["rank"] == "8"
 
 
 # ---------------------------------------------------------------------------
