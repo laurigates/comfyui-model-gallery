@@ -41,6 +41,7 @@ Mirror gallery-loader's thumb-server. Endpoints under `/model_gallery/`:
 | Endpoint | Purpose |
 |----------|---------|
 | `/list` | Enumerate a `folder_paths` category (the widget's combo source) with mtime + subfolder; flag which entries have a sibling preview. |
+| `/meta` | Read a single file's embedded header metadata (`.safetensors`: base-model architecture, LoRA rank/alpha, trained resolution, top training tags) via `struct` + `json` — bundled libs, header only, path resolved through `folder_paths`. Powers the authoritative tier of the model-info annotation. |
 | `/thumb` | Serve the Civitai-style sibling `.png`/`.jpeg`/`.webp` that sits next to a `.safetensors` (resized webp). |
 
 **Security perimeter:** `/thumb` reads a path off disk → it MUST gate on the
@@ -86,12 +87,24 @@ the model combos none of them touch in place. **Do not rebuild their metadata**
 4. **v0.4 — fold in `LoadImageOutput`?** No — that belongs in gallery-loader
    (taskwarrior 156). Keep this pack to model combos.
 
-## Open decisions
+## Model info (implemented)
 
-- **Per-file metadata badges** (base-model SD1.5/SDXL/Flux tags) — out of scope
-  here; they need safetensors-header reads. If wanted, add to *this* backend
-  (it already has a Python server) rather than the frontend-only `model-info`
-  idea. Decide after v0.2.
+Two layers annotate each card with *what the model is*:
+
+- **Tier 1 — filename corpus** (`web/data/models.json` + `web/js/model-corpus.js`):
+  base-architecture families + notable models, matched by case-insensitive
+  regex against the basename, optionally gated per category. Instant, offline,
+  covers every file type. Drives card badges/summary, the fuzzy search fields,
+  and the widget tooltip.
+- **Tier 2 — embedded header read** (`/model_gallery/meta`): authoritative
+  `.safetensors` `__metadata__` (base, LoRA rank/alpha, trained resolution, top
+  `ss_tag_frequency` tags). Fetched lazily (per-card ⓘ + the current value).
+- **Tier 3 — hash → Civitai** (deferred): authoritative even with no embedded
+  metadata, but needs a full-file SHA256 (GBs of I/O, must be cached) + outbound
+  network + privacy considerations. Left out of the offline-by-default surface;
+  add behind an explicit opt-in if wanted.
+
+## Open decisions
 - **Subfolder model**: flat fuzzy over full relative paths vs. drill-down
   chips. Start with fuzzy-over-full-path + optional top-level chips.
 - **Thumbnail cache**: on-the-fly resize vs. a cached webp dir. Start
