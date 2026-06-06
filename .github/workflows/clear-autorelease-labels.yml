@@ -1,13 +1,9 @@
 name: "Maintenance: clear autorelease labels"
 
-# Manual escape hatch for a clogged release-please pipeline.
-#
-# release-please labels its release PR `autorelease: pending` and only flips
-# it to `autorelease: tagged` once the GitHub release/tag is created. If that
-# release step fails (e.g. a tag ruleset blocks the app), the merged PR stays
-# `pending` forever and every subsequent run re-attempts — and re-fails — the
-# same release. Clearing the stale label on closed PRs lets release-please
-# move on. Run this, then re-run the release-please workflow to unclog.
+# Thin caller for the org reusable workflow. See
+# laurigates/.github/.github/workflows/reusable-clear-autorelease-labels.yml
+# for what this does and when to run it (manual escape hatch for a clogged
+# release-please pipeline).
 
 on:
   workflow_dispatch:
@@ -21,59 +17,13 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-
-concurrency:
-  group: clear-autorelease-labels-${{ github.repository }}
-  cancel-in-progress: false
-
 jobs:
   clear-labels:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Strip label from closed PRs
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          LABEL: ${{ inputs.label }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          set -euo pipefail
-
-          echo "Searching closed PRs labelled '$LABEL' in $REPO…"
-          # The issues API returns both issues and PRs; state=closed includes
-          # merged PRs. Keep only entries that are actually pull requests.
-          mapfile -t prs < <(
-            gh api --paginate -X GET "/repos/$REPO/issues" \
-              -f state=closed -f labels="$LABEL" \
-              --jq '.[] | select(.pull_request != null) | .number'
-          )
-
-          if [ "${#prs[@]}" -eq 0 ]; then
-            echo "No closed PRs carry '$LABEL'. Nothing to do."
-            echo "No closed PRs carry \`$LABEL\`." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          {
-            echo "### Cleared \`$LABEL\`"
-            echo ""
-            echo "| PR | Action |"
-            echo "| -- | ------ |"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          for n in "${prs[@]}"; do
-            if [ "$DRY_RUN" = "true" ]; then
-              echo "[dry-run] would remove '$LABEL' from PR #$n"
-              echo "| #$n | dry-run (skipped) |" >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "Removing '$LABEL' from PR #$n"
-              gh pr edit "$n" --repo "$REPO" --remove-label "$LABEL"
-              echo "| #$n | removed |" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-
-          echo "Done (${#prs[@]} PR(s))."
+    uses: laurigates/.github/.github/workflows/reusable-clear-autorelease-labels.yml@main
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    with:
+      label: ${{ inputs.label }}
+      dry_run: ${{ inputs.dry_run }}
