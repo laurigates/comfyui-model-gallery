@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.2...comfyui-model-gallery-v0.1.3) (2026-06-06)
+
+
+### Features
+
+* **build:** migrate to TypeScript + bun build ([#9](https://github.com/laurigates/comfyui-model-gallery/issues/9)) ([9291f02](https://github.com/laurigates/comfyui-model-gallery/commit/9291f02b2377cb6c3f34a14a25f6ea3f3b864122))
+
 ## [0.1.2](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.1...comfyui-model-gallery-v0.1.2) (2026-06-06)
 
 
