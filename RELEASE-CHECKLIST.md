@@ -6,6 +6,10 @@
 - [ ] Create the `REGISTRY_ACCESS_TOKEN` repo secret (PAT from https://registry.comfy.org/).
 - [ ] Confirm gitops pushes `RELEASE_PLEASE_APP_ID` (var) + `RELEASE_PLEASE_PRIVATE_KEY` (secret).
 - [ ] Add the repo to `gitops/repositories.tf` (do not configure via the GitHub UI).
+- [ ] If a **tag ruleset** restricts tag creation, list the `laurigates-release-please`
+      app in its bypass actors. Otherwise release-please opens the release PR fine but
+      fails to create the release/tag with `403 Resource not accessible by integration`
+      (the app's `contents: write` is overridden by the ruleset). Configure in `gitops`.
 
 ## Per release
 
