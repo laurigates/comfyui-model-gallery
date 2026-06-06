@@ -1,4 +1,4 @@
-// model-corpus.js — pattern-matched metadata for model files.
+// model-corpus.ts — pattern-matched metadata for model files.
 //
 // The model picker lists arbitrary user filenames (folder_paths enumerates
 // whatever is on disk), so unlike sampler-info — where the vocabulary is a
@@ -16,36 +16,68 @@
 //     VAE-only or upscaler-only pattern), avoiding cross-category false hits.
 //
 // Everything here is pure (no DOM, no fetch) so the fiddly regex/lookup math
-// is unit-testable; model-gallery.js owns loading and rendering.
+// is unit-testable; model-gallery.ts owns loading and rendering.
+
+const EXT_NAME = "comfyui-model-gallery";
+
+/** A single corpus entry — describes one model file or family. */
+export interface CorpusEntry {
+  base?: string;
+  family?: string;
+  type?: string;
+  summary?: string;
+  good_for?: string;
+  notes?: string;
+  [key: string]: unknown;
+}
+
+/** A raw prefix entry as authored in the JSON corpus (regex source string). */
+interface RawPrefixEntry extends CorpusEntry {
+  match: string;
+  categories?: string[];
+}
+
+/** A compiled prefix entry — the regex source replaced with a live RegExp. */
+export interface PrefixEntry extends CorpusEntry {
+  match: string;
+  categories?: string[];
+  re: RegExp;
+}
+
+/** The raw corpus document, as parsed from the JSON file. */
+interface RawCorpus {
+  exact?: Record<string, CorpusEntry>;
+  prefix?: RawPrefixEntry[];
+}
+
+/** The lookup-ready corpus, with prefix regexes precompiled. */
+export interface CompiledCorpus {
+  exact: Record<string, CorpusEntry>;
+  prefix: PrefixEntry[];
+}
 
 /**
  * Compile a raw corpus document (parsed JSON) into a lookup-ready shape:
  * precompile each prefix entry's regex once, dropping any that fail to
  * compile. Regexes are matched case-insensitively (the `i` flag) so corpus
  * authors can write lowercase patterns and still match mixed-case filenames.
- *
- * @param {{exact?: object, prefix?: object[]}} raw
- * @returns {{exact: object, prefix: object[]}}
  */
-export function compileCorpus(raw) {
-  const prefix = (raw?.prefix || [])
+export function compileCorpus(raw: RawCorpus | null | undefined): CompiledCorpus {
+  const prefix = (raw?.prefix ?? [])
     .map((p) => ({ ...p, re: safeRegex(p.match) }))
-    .filter((p) => p.re);
-  return { exact: raw?.exact || {}, prefix };
+    .filter((p): p is PrefixEntry => p.re !== null);
+  return { exact: raw?.exact ?? {}, prefix };
 }
 
 /**
  * Build a case-insensitive RegExp, returning null (with a warning) on a bad
  * pattern so one malformed corpus entry can't break the whole lookup table.
- *
- * @param {string} pattern
- * @returns {RegExp | null}
  */
-export function safeRegex(pattern) {
+export function safeRegex(pattern: string): RegExp | null {
   try {
     return new RegExp(pattern, "i");
   } catch (e) {
-    console.warn(`[comfyui-model-gallery] bad regex in corpus: ${pattern}`, e);
+    console.warn(`[${EXT_NAME}] bad regex in corpus: ${pattern}`, e);
     return null;
   }
 }
@@ -54,11 +86,8 @@ export function safeRegex(pattern) {
  * The bare filename, lowercased, with any subfolder prefix and Windows
  * backslashes stripped. folder_paths returns names like "flux/dev.safetensors";
  * the corpus describes the file, not the folder, so match on the basename.
- *
- * @param {string} name
- * @returns {string}
  */
-export function corpusKey(name) {
+export function corpusKey(name: unknown): string {
   if (!name || typeof name !== "string") return "";
   const norm = name.replace(/\\/g, "/");
   const idx = norm.lastIndexOf("/");
@@ -70,17 +99,17 @@ export function corpusKey(name) {
  * (then the card/tooltip just shows the bare filename — additive, never
  * fabricated). Exact basename match wins; otherwise the first prefix regex
  * that matches AND is allowed for `category` wins.
- *
- * @param {{exact: object, prefix: object[]}} corpus
- * @param {string} name      The folder_paths combo value (may include a subfolder).
- * @param {string} [category]  folder_paths category, used to gate `categories`-scoped entries.
- * @returns {object | null}
  */
-export function lookup(corpus, name, category) {
+export function lookup(
+  corpus: CompiledCorpus | null | undefined,
+  name: string,
+  category?: string,
+): CorpusEntry | null {
   if (!corpus) return null;
   const key = corpusKey(name);
   if (!key) return null;
-  if (corpus.exact[key]) return corpus.exact[key];
+  const exact = corpus.exact[key];
+  if (exact) return exact;
   for (const p of corpus.prefix) {
     if (p.categories && category && !p.categories.includes(category)) continue;
     if (p.re.test(key)) return p;
@@ -93,11 +122,8 @@ export function lookup(corpus, name, category) {
  * to the filename itself). Lets a user filter "sdxl" or "anime" or "upscale"
  * and find files whose metadata — not their cryptic name — says so. Falsy
  * fields are dropped by the caller's fuzzy ranker.
- *
- * @param {object | null} info
- * @returns {(string | undefined)[]}
  */
-export function corpusFields(info) {
+export function corpusFields(info: CorpusEntry | null): (string | undefined)[] {
   if (!info) return [];
   return [info.base, info.family, info.type, info.summary, info.good_for];
 }
@@ -106,12 +132,8 @@ export function corpusFields(info) {
  * Render the corpus entry as a multi-line tooltip string (for the widget's
  * native hover / long-press tooltip on the currently-selected value). Mirrors
  * sampler-info's formatter. Returns "" when there's nothing worth showing.
- *
- * @param {string} name   The displayed model name.
- * @param {object | null} info
- * @returns {string}
  */
-export function formatTooltip(name, info) {
+export function formatTooltip(name: string, info: CorpusEntry | null): string {
   if (!info) return "";
   const headerBits = [name];
   if (info.base) headerBits.push(info.base);

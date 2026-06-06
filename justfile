@@ -10,28 +10,43 @@ default:
 # Quality
 ##########
 
-# Lint Python + JS/JSON (no changes).
+# Lint Python + TS/JSON (no changes).
 [group: "quality"]
 lint:
     uv run ruff check .
-    npx @biomejs/biome check .
+    bunx biome check .
 
-# Auto-format Python + JS/JSON.
+# Auto-format Python + TS/JSON.
 [group: "quality"]
 format:
     uv run ruff format .
     uv run ruff check --fix .
-    npx @biomejs/biome check --write .
+    bunx biome check --write .
 
-# Run the full test suite (pytest + Vitest) — the local CI gate.
+# Typecheck the TypeScript source (tsc --noEmit).
+[group: "quality"]
+typecheck:
+    bun run typecheck
+
+# Compile src/ -> web/dist/ via bun build (+ copy corpus).
+[group: "quality"]
+build:
+    bun run build
+
+# Dead-code / unused-dependency check.
+[group: "quality"]
+knip:
+    bun run knip
+
+# Run the full test suite (pytest + Vitest) — part of the local CI gate.
 [group: "quality"]
 test:
     uv run pytest -v
-    npm test
+    bun run test
 
-# Lint + test in one shot.
+# Lint + typecheck + build + knip + test in one shot — the local CI gate.
 [group: "quality"]
-check: lint test
+check: lint typecheck build knip test
 
 ##########
 # Documentation artifacts

@@ -1,5 +1,5 @@
+import { fuzzyRank } from "@laurigates/comfy-modal-kit";
 import { describe, expect, it } from "vitest";
-import { fuzzyRank } from "../../web/js/modal-fuzzy.js";
 import {
   basenameOf,
   categoryForWidget,
@@ -8,10 +8,11 @@ import {
   subfolderChips,
   topLevelSubfolder,
   WIDGET_CATEGORY,
-} from "../../web/js/model-gallery.js";
+} from "../../src/model-gallery.ts";
 
-// modal-fuzzy is reused verbatim — one smoke assertion keeps a tripwire on it.
-describe("modal-fuzzy (reused)", () => {
+// modal-fuzzy is now consumed from @laurigates/comfy-modal-kit — one smoke
+// assertion keeps a tripwire on the kit's fuzzy ranker.
+describe("modal-fuzzy (from comfy-modal-kit)", () => {
   it("scores a subsequence match and returns null for a non-match", () => {
     const hit = fuzzyRank("eul", ["euler"]);
     expect(hit).not.toBeNull();

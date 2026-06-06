@@ -10,7 +10,9 @@ repos:
     rev: v0.6.1
     hooks:
       - id: biome-check
-        additional_dependencies: ["@biomejs/biome@1.9.4"]
+        # Match the biome.json schema (2.4.x) and CI's setup-biome pin so
+        # the pre-commit hook understands the 2.x config (e.g. files.includes).
+        additional_dependencies: ["@biomejs/biome@2.4.15"]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

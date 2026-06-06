@@ -1,13 +1,24 @@
 {
-  "name": "comfyui-model-gallery-dev",
+  "name": "comfyui-model-gallery",
   "private": true,
   "type": "module",
-  "description": "Dev-only test harness for comfyui-model-gallery. Nothing here ships to users.",
+  "description": "Touch-first card-grid model picker for ComfyUI's folder-backed combos. TypeScript source in src/, built to web/dist/ via bun build. Consumes @laurigates/comfy-modal-kit. See ADR-0001.",
   "scripts": {
+    "build": "bun build ./src/model-gallery.ts --target browser --format esm --outdir web/dist --external '/scripts/*' && cp -R web/data web/dist/data",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "biome check",
+    "knip": "knip"
+  },
+  "dependencies": {
+    "@laurigates/comfy-modal-kit": "^0.2.0"
   },
   "devDependencies": {
-    "vitest": "^4.1.7"
+    "typescript": "^5.7.0",
+    "@comfyorg/comfyui-frontend-types": "^1.43.0",
+    "@biomejs/biome": "^2.4.15",
+    "vitest": "^4.1.7",
+    "knip": "^5.0.0"
   }
 }
