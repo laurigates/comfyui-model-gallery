@@ -80,7 +80,7 @@ _META_CACHE_MAX = 4096
 # strings, and folder_paths.get_filename_list is the authority on contents.
 # Keeping an explicit allowlist means a crafted ?category= can't probe
 # arbitrary registered folder types. Mirrors the widget→category map in
-# web/js/model-gallery.js.
+# src/model-gallery.ts.
 KNOWN_CATEGORIES = {
     "loras",
     "checkpoints",

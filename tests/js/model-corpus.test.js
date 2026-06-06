@@ -6,7 +6,7 @@ import {
   formatTooltip,
   lookup,
   safeRegex,
-} from "../../web/js/model-corpus.js";
+} from "../../src/model-corpus.ts";
 
 describe("safeRegex", () => {
   it("compiles a valid pattern case-insensitively", () => {

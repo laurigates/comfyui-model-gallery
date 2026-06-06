@@ -29,7 +29,10 @@ def _write_safetensors(path, header_obj) -> None:
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-JS_SRC = (ROOT / "web" / "js" / "model-gallery.js").read_text()
+# The frontend is now TypeScript (src/model-gallery.ts), compiled to
+# web/dist/ via `bun build`. The category-gate consistency test parses the
+# WIDGET_CATEGORY map straight out of the TS source (no JS execution).
+JS_SRC = (ROOT / "src" / "model-gallery.ts").read_text()
 
 
 def _call(handler, **query):
@@ -319,15 +322,17 @@ def test_meta_caches_on_path_mtime_size(tmp_path):
 # ---------------------------------------------------------------------------
 #
 # The frontend maps widget names to folder_paths categories in
-# web/js/model-gallery.js; the backend gates ?category= on KNOWN_CATEGORIES.
+# src/model-gallery.ts; the backend gates ?category= on KNOWN_CATEGORIES.
 # If a category the frontend can request is missing from the backend gate, a
-# legitimate widget silently 400s. This parses the categories out of the JS
+# legitimate widget silently 400s. This parses the categories out of the TS
 # source (import-light — no JS execution) and asserts the gate covers them.
 
 
 def _frontend_categories() -> set[str]:
     """Extract the category strings from the WIDGET_CATEGORY Map literal."""
-    start = JS_SRC.index("const WIDGET_CATEGORY = new Map([")
+    # The TS source declares the map as `new Map<string, string>([` — match
+    # the declaration up to the opening array bracket.
+    start = re.search(r"const WIDGET_CATEGORY = new Map(?:<[^>]*>)?\(\[", JS_SRC).start()
     end = JS_SRC.index("]);", start)
     block = JS_SRC[start:end]
     # Each entry is ["widget_name", "category"] — the second quoted string.

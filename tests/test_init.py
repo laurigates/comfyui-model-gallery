@@ -16,7 +16,9 @@ INIT_SRC = (ROOT / "__init__.py").read_text()
 
 
 def test_init_declares_web_directory_pointing_at_web():
-    assert 'WEB_DIRECTORY = "./web"' in INIT_SRC
+    # The frontend is built to web/dist/ via `bun build` (ADR-0001); the
+    # loader serves that tree as the extension root.
+    assert 'WEB_DIRECTORY = "./web/dist"' in INIT_SRC
 
 
 def test_init_reexports_node_mappings():
