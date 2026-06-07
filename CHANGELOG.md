@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.3...comfyui-model-gallery-v0.1.4) (2026-06-07)
+
+
+### Bug Fixes
+
+* **ci:** set skip_checkout so the built web/dist reaches the registry ([#13](https://github.com/laurigates/comfyui-model-gallery/issues/13)) ([0dd0db6](https://github.com/laurigates/comfyui-model-gallery/commit/0dd0db657a4ea315aa82b5271609a26cb9909096))
+
+
+### Miscellaneous
+
+* **deps:** Bump gitleaks/gitleaks-action from 2 to 3 ([#11](https://github.com/laurigates/comfyui-model-gallery/issues/11)) ([f57db09](https://github.com/laurigates/comfyui-model-gallery/commit/f57db094eb731bc54c06c7e6f475403271d11a79))
+
 ## [0.1.3](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.2...comfyui-model-gallery-v0.1.3) (2026-06-06)
 
 
