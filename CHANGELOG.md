@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.4...comfyui-model-gallery-v0.1.5) (2026-06-08)
+
+
+### Bug Fixes
+
+* add Comfy Registry icon/banner and publish on release event ([#16](https://github.com/laurigates/comfyui-model-gallery/issues/16)) ([28ae5d1](https://github.com/laurigates/comfyui-model-gallery/commit/28ae5d12b261fb3e4a83231e12180001c6db85a6))
+
 ## [0.1.4](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.3...comfyui-model-gallery-v0.1.4) (2026-06-07)
 
 
