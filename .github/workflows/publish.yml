@@ -21,7 +21,7 @@ jobs:
           bun install --frozen-lockfile
           bun run build
       - name: Publish Custom Node
-        uses: Comfy-Org/publish-node-action@v1
+        uses: Comfy-Org/publish-node-action@d2366e7abb6ab16f3bb03e3520ae25c8cf749bc9 # main: skip_checkout support
         with:
           # PAT issued at https://registry.comfy.org/, stored as the
           # REGISTRY_ACCESS_TOKEN repo secret.
