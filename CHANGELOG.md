@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.5...comfyui-model-gallery-v0.1.6) (2026-06-08)
+
+
+### Bug Fixes
+
+* ship web/dist in registry tarball (pin publish-node-action skip_checkout) ([#19](https://github.com/laurigates/comfyui-model-gallery/issues/19)) ([221e964](https://github.com/laurigates/comfyui-model-gallery/commit/221e964abf1d178a4d40cfb88d8cd3c10f261f21))
+
 ## [0.1.5](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.4...comfyui-model-gallery-v0.1.5) (2026-06-08)
 
 
