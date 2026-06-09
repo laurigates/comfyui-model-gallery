@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-model-gallery"
 description = "Touch-first card-grid picker with preview thumbnails for the folder-backed model combos (LoRA, checkpoint, VAE, ControlNet, UNet, CLIP, upscale)."
-version = "0.1.6"
+version = "0.1.7"
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10"

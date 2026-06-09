@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.6...comfyui-model-gallery-v0.1.7) (2026-06-09)
+
+
+### Bug Fixes
+
+* **registry:** ship runtime-only files in the Comfy Registry tarball ([#21](https://github.com/laurigates/comfyui-model-gallery/issues/21)) ([6067bbb](https://github.com/laurigates/comfyui-model-gallery/commit/6067bbbaeb1c9df19d630bd06e6d5ef1b4f9963f))
+
 ## [0.1.6](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.5...comfyui-model-gallery-v0.1.6) (2026-06-08)
 
 
