@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.8](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.7...comfyui-model-gallery-v0.1.8) (2026-06-20)
+
+
+### Bug Fixes
+
+* pin comfyui-frontend-package to 3-part version (&gt;=1.40.0) ([#25](https://github.com/laurigates/comfyui-model-gallery/issues/25)) ([b2f1bc6](https://github.com/laurigates/comfyui-model-gallery/commit/b2f1bc6eb5ffe51d0beb0e20bb96618d2f3b26de))
+
+
+### Miscellaneous
+
+* **deps:** remove Dependabot config, consolidate on Renovate ([#24](https://github.com/laurigates/comfyui-model-gallery/issues/24)) ([01ce505](https://github.com/laurigates/comfyui-model-gallery/commit/01ce505969c9024f86fd8b16c98747c8239fe11c))
+
 ## [0.1.7](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.6...comfyui-model-gallery-v0.1.7) (2026-06-09)
 
 
