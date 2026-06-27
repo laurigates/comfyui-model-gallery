@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Touch-first card-grid model picker for ComfyUI's folder-backed combos. TypeScript source in src/, built to web/dist/ via bun build. Consumes @laurigates/comfy-modal-kit. See ADR-0001.",
   "scripts": {
-    "build": "bun build ./src/model-gallery.ts --target browser --format esm --outdir web/dist --external '/scripts/*' && cp -R web/data web/dist/data",
+    "build": "bun build ./src/model-gallery.ts --target browser --format esm --outdir web/dist --external '/scripts/*' && rm -rf web/dist/data && cp -R web/data web/dist/data",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
