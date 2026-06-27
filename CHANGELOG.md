@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.8...comfyui-model-gallery-v0.1.9) (2026-06-26)
+
+
+### Bug Fixes
+
+* **dist:** commit web/dist so git-based updates carry the built frontend ([#30](https://github.com/laurigates/comfyui-model-gallery/issues/30)) ([aa96f58](https://github.com/laurigates/comfyui-model-gallery/commit/aa96f58fe5bc1ebc019c53b94233bda0b13b7e39))
+
 ## [0.1.8](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.7...comfyui-model-gallery-v0.1.8) (2026-06-20)
 
 
