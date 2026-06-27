@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.9...comfyui-model-gallery-v0.1.10) (2026-06-27)
+
+
+### Bug Fixes
+
+* **build:** make web/data copy idempotent ([#32](https://github.com/laurigates/comfyui-model-gallery/issues/32)) ([cfba554](https://github.com/laurigates/comfyui-model-gallery/commit/cfba554731e21f386367c3151a5f60f60bdccb36))
+
 ## [0.1.9](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.8...comfyui-model-gallery-v0.1.9) (2026-06-26)
 
 
