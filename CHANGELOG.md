@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.10...comfyui-model-gallery-v0.1.11) (2026-06-28)
+
+
+### Miscellaneous
+
+* sync uv.lock and auto-bump it via release-please ([#34](https://github.com/laurigates/comfyui-model-gallery/issues/34)) ([a6c5b0b](https://github.com/laurigates/comfyui-model-gallery/commit/a6c5b0bab5bfa7bf00f5b78d67472a2d882b9e30))
+
 ## [0.1.10](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.9...comfyui-model-gallery-v0.1.10) (2026-06-27)
 
 
