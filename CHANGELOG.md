@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.11...comfyui-model-gallery-v0.1.12) (2026-07-02)
+
+
+### Features
+
+* register a model-combo field provider with comfy-modal-kit ([#38](https://github.com/laurigates/comfyui-model-gallery/issues/38)) ([19553e6](https://github.com/laurigates/comfyui-model-gallery/commit/19553e6853b6877c92e6a9a78f415a95591420ac))
+
 ## [0.1.11](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.10...comfyui-model-gallery-v0.1.11) (2026-06-28)
 
 
