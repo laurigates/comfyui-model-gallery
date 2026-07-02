@@ -2,11 +2,22 @@
 
 Touch-first card-grid picker with preview thumbnails for the folder-backed model combos (LoRA, checkpoint, VAE, ControlNet, UNet, CLIP, upscale).
 
-> Part of a family of mobile-first ComfyUI usability packs
-> ([gallery-loader](https://github.com/laurigates/comfyui-gallery-loader),
-> [sampler-info](https://github.com/laurigates/comfyui-sampler-info)):
+> Part of a family of mobile-first ComfyUI usability packs built on the shared
+> [`@laurigates/comfy-modal-kit`](https://github.com/laurigates/comfy-modal-kit)
+> — [gallery-loader](https://github.com/laurigates/comfyui-gallery-loader),
+> [prompt-editor](https://github.com/laurigates/comfyui-prompt-editor),
+> [sampler-info](https://github.com/laurigates/comfyui-sampler-info),
+> [touch-numeric](https://github.com/laurigates/comfyui-touch-numeric),
+> [touch-connect](https://github.com/laurigates/comfyui-touch-connect),
+> [touch-resize](https://github.com/laurigates/comfyui-touch-resize),
+> [touch-tooltips](https://github.com/laurigates/comfyui-touch-tooltips):
 > touch-friendly HTML modals that replace clunky native LiteGraph controls,
 > detected by widget name, additive and non-clobbering.
+>
+> Via the kit's cross-pack field-provider registry (v0.4.0) this pack also
+> registers the gallery as an **inline** control, so an editor built on the kit
+> (e.g. prompt-editor) can mount the model picker directly in a field row — not
+> only on canvas tap. See [ADR-0002](docs/blueprint/adrs/0002-adopt-field-provider-and-click-coordinator.md).
 
 ![Model gallery picker](docs/picker.png)
 

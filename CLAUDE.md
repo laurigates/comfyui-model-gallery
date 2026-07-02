@@ -23,6 +23,7 @@ inlines the kit into the shipped bundle (formerly the vendored
 | ID | Title | Domain |
 |----|-------|--------|
 | [ADR-0001](docs/blueprint/adrs/0001-adopt-typescript-bun-build.md) | Adopt TypeScript + bun build for the frontend extension (supersedes the original no-bundler / multi-file-JS approach) | build-tooling |
+| [ADR-0002](docs/blueprint/adrs/0002-adopt-field-provider-and-click-coordinator.md) | Register a model-combo field provider & adopt the kit click coordinator (`patchWidgetPointer`); implements kit ADR-0001 as a provider | api-design |
 
 ## File layout
 

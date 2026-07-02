@@ -1,4 +1,85 @@
 // node_modules/@laurigates/comfy-modal-kit/dist/index.js
+var KEY = Symbol.for("laurigates.comfyModalKit");
+function getKit() {
+  const g = globalThis;
+  let kit = g[KEY];
+  if (!kit) {
+    kit = { fieldProviders: [], activeModal: null, pointerClaim: null };
+    g[KEY] = kit;
+  }
+  return kit;
+}
+function registerFieldProvider(provider) {
+  const list = getKit().fieldProviders;
+  const i = list.findIndex((p) => p.id === provider.id);
+  if (i >= 0) {
+    list.splice(i, 1, provider);
+  } else {
+    list.push(provider);
+  }
+}
+var guardInstalled = false;
+function setActiveModal(handle) {
+  installPointerGuard();
+  dismissActiveModal();
+  getKit().activeModal = handle;
+}
+function dismissActiveModal() {
+  const kit = getKit();
+  const active = kit.activeModal;
+  if (!active)
+    return;
+  kit.activeModal = null;
+  try {
+    active.close();
+  } catch (e) {
+    console.warn("[comfy-modal-kit] active modal close() threw", e);
+  }
+}
+function getActiveModal() {
+  return getKit().activeModal;
+}
+function patchWidgetPointer(widget, opener) {
+  const original = widget.onPointerDown;
+  function patched(pointer, node, canvas) {
+    try {
+      if (typeof original === "function") {
+        const consumed = original.call(this, pointer, node, canvas);
+        if (consumed)
+          return consumed;
+      }
+      return opener(pointer, node, canvas);
+    } catch (e) {
+      console.warn("[comfy-modal-kit] patched onPointerDown threw", e);
+      return false;
+    }
+  }
+  widget.onPointerDown = patched;
+  return {
+    restore() {
+      widget.onPointerDown = original;
+    }
+  };
+}
+function installPointerGuard() {
+  if (guardInstalled)
+    return;
+  if (typeof window === "undefined")
+    return;
+  guardInstalled = true;
+  window.addEventListener("pointerdown", pointerGuard, true);
+}
+function pointerGuard(e) {
+  const active = getKit().activeModal;
+  if (!active)
+    return;
+  const target = e.target;
+  if (active.element && target && active.element.contains(target)) {
+    return;
+  }
+  e.stopImmediatePropagation();
+  dismissActiveModal();
+}
 function fuzzyScore(query, target) {
   if (!query)
     return { score: 0, matches: [] };
@@ -102,9 +183,8 @@ function highlightMatches(target, matchIndices) {
   }
   return frag;
 }
-var STYLE_ID = "cmp-shell-style";
-var ACTIVE = null;
-var CSS = `
+var STYLE_ID2 = "cmp-shell-style";
+var CSS2 = `
 .cmp-backdrop {
     position: fixed;
     inset: 0;
@@ -253,37 +333,18 @@ var CSS = `
     color: #b8b8c0;
 }
 `;
-function ensureStyle() {
-  if (document.getElementById(STYLE_ID))
+function ensureStyle2() {
+  if (document.getElementById(STYLE_ID2))
     return;
   const s = document.createElement("style");
-  s.id = STYLE_ID;
-  s.textContent = CSS;
+  s.id = STYLE_ID2;
+  s.textContent = CSS2;
   document.head.appendChild(s);
 }
-function dismissActive() {
-  if (!ACTIVE)
-    return;
-  const a = ACTIVE;
-  ACTIVE = null;
-  try {
-    a.backdrop.remove();
-    a.dialog.remove();
-    document.removeEventListener("keydown", a._onKey, true);
-  } finally {
-    try {
-      a.opts.onClose?.();
-    } catch (e) {
-      console.warn("[modal-shell] onClose threw", e);
-    }
-  }
-}
 function openModalShell(opts = {}) {
-  ensureStyle();
-  dismissActive();
+  ensureStyle2();
   const backdrop = document.createElement("div");
   backdrop.className = "cmp-backdrop";
-  backdrop.addEventListener("pointerdown", dismissActive);
   const dialog = document.createElement("div");
   dialog.className = "cmp-dialog";
   if (opts.width)
@@ -310,7 +371,6 @@ function openModalShell(opts = {}) {
   closeBtn.type = "button";
   closeBtn.textContent = "×";
   closeBtn.title = "Close (Esc)";
-  closeBtn.addEventListener("click", dismissActive);
   headerEl.append(titleEl, closeBtn);
   const toolbarEl = document.createElement("div");
   toolbarEl.className = "cmp-toolbar";
@@ -343,11 +403,38 @@ function openModalShell(opts = {}) {
     footerEl.style.display = "none";
   }
   dialog.append(headerEl, toolbarEl, searchRow, bodyEl, footerEl);
+  let torn = false;
+  const teardown = () => {
+    if (torn)
+      return;
+    torn = true;
+    try {
+      backdrop.remove();
+      dialog.remove();
+      document.removeEventListener("keydown", onKey, true);
+    } finally {
+      try {
+        opts.onClose?.();
+      } catch (e) {
+        console.warn("[modal-shell] onClose threw", e);
+      }
+    }
+  };
+  const handle = { id: "modal-shell", element: dialog, close: teardown };
+  const requestClose = () => {
+    if (getActiveModal() === handle) {
+      dismissActiveModal();
+    } else {
+      teardown();
+    }
+  };
+  backdrop.addEventListener("pointerdown", requestClose);
+  closeBtn.addEventListener("click", requestClose);
   const onKey = (e) => {
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      dismissActive();
+      requestClose();
       return;
     }
     try {
@@ -373,14 +460,14 @@ function openModalShell(opts = {}) {
     setStatus(s) {
       statusEl.textContent = s || "";
     },
-    close: dismissActive,
+    close: requestClose,
     _onKey: onKey,
     opts
   };
-  ACTIVE = controller;
+  setActiveModal(handle);
   if (opts.showSearch !== false) {
     requestAnimationFrame(() => {
-      if (ACTIVE === controller)
+      if (getActiveModal() === handle)
         searchEl.focus();
     });
   }
@@ -457,7 +544,7 @@ var EXT_NAME2 = "comfyui-model-gallery";
 var LIST_URL = "/model_gallery/list";
 var META_URL = "/model_gallery/meta";
 var CORPUS_URL = `/extensions/${EXT_NAME2}/data/models.json`;
-var STYLE_ID2 = "mg-style";
+var STYLE_ID = "mg-style";
 var CORPUS = { exact: {}, prefix: [] };
 var CORPUS_LOADED = false;
 async function loadCorpus() {
@@ -571,52 +658,64 @@ function subfolderChips(items) {
   const chips = [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   return hasRoot ? ["__all__", "__root__", ...chips] : ["__all__", ...chips];
 }
-function openPicker(widget, node) {
-  ensureStyle2();
-  const maybeCategory = categoryForWidget(widget);
-  if (!maybeCategory)
-    return;
-  const category = maybeCategory;
+function createGallery(opts) {
+  ensureStyle();
+  const { category, initialValue } = opts;
   const state = {
     items: [],
     query: "",
     chip: "__all__",
     chips: [],
-    currentValue: (widget.value ?? "").toString()
+    currentValue: initialValue
   };
-  const modal = openModalShell({
-    title: "Choose model",
-    subtitle: `(${widget.name})`,
-    placeholder: "Filter by name…",
-    width: "min(1100px, calc(100vw - 16px))",
-    height: "min(88vh, 820px)",
-    footerLeftHTML: "<kbd>Esc</kbd> close · tap a card to select",
-    footerRightHTML: '<span class="mg-count"></span>'
-  });
+  const el = document.createElement("div");
+  el.className = "mg-inline";
+  const ownSearch = !opts.searchEl;
+  const searchEl = opts.searchEl ?? document.createElement("input");
+  if (ownSearch) {
+    searchEl.type = "text";
+    searchEl.className = "mg-search";
+    searchEl.placeholder = "Filter by name…";
+    el.appendChild(searchEl);
+  }
   const chipsEl = document.createElement("div");
   chipsEl.className = "mg-chips";
-  modal.toolbarEl.appendChild(chipsEl);
+  el.appendChild(chipsEl);
   const gridEl = document.createElement("div");
   gridEl.className = "mg-grid";
-  modal.bodyEl.appendChild(gridEl);
-  const countEl = modal.footerEl.querySelector(".mg-count");
-  function setCount(visible, total) {
-    if (countEl)
-      countEl.textContent = `${visible} / ${total}`;
-  }
-  modal.searchEl.addEventListener("input", () => {
-    state.query = modal.searchEl.value.trim();
-    renderGrid();
+  el.appendChild(gridEl);
+  const footerEl = document.createElement("div");
+  footerEl.className = "mg-inline-footer";
+  const statusEl = document.createElement("span");
+  statusEl.className = "mg-status";
+  const countEl = document.createElement("span");
+  countEl.className = "mg-count";
+  footerEl.append(statusEl, countEl);
+  el.appendChild(footerEl);
+  const setBusy = opts.setBusy ?? ((b) => {
+    gridEl.style.opacity = b ? "0.5" : "";
   });
-  chipsEl.addEventListener("click", (e) => {
+  const setStatus = opts.setStatus ?? ((s) => {
+    statusEl.textContent = s;
+  });
+  function setCount(visible, total) {
+    countEl.textContent = `${visible} / ${total}`;
+  }
+  const onSearchInput = () => {
+    state.query = searchEl.value.trim();
+    renderGrid();
+  };
+  searchEl.addEventListener("input", onSearchInput);
+  const onChipsClick = (e) => {
     const b = e.target.closest("[data-chip]");
     if (!b)
       return;
     state.chip = b.dataset.chip ?? "__all__";
     renderChips();
     renderGrid();
-  });
-  gridEl.addEventListener("click", (e) => {
+  };
+  chipsEl.addEventListener("click", onChipsClick);
+  const onGridClick = (e) => {
     const infoBtn = e.target.closest(".mg-info-btn");
     if (infoBtn) {
       e.stopPropagation();
@@ -626,8 +725,18 @@ function openPicker(widget, node) {
     const card = e.target.closest(".mg-card");
     if (!card)
       return;
-    commit(card.dataset.value ?? "");
-  });
+    select(card.dataset.value ?? "");
+  };
+  gridEl.addEventListener("click", onGridClick);
+  function select(value) {
+    state.currentValue = value;
+    for (const c of gridEl.querySelectorAll(".mg-card.is-selected")) {
+      c.classList.remove("is-selected");
+    }
+    const chosen = gridEl.querySelector(`.mg-card[data-value="${CSS.escape(value)}"]`);
+    chosen?.classList.add("is-selected");
+    opts.onSelect?.(value);
+  }
   function chipLabel(chip) {
     if (chip === "__all__")
       return "All";
@@ -689,10 +798,10 @@ function openPicker(widget, node) {
       gridEl.appendChild(buildCard(it, ranked.primaryMatches, info));
     }
     if (!rows.length) {
-      const el = document.createElement("div");
-      el.className = "mg-empty";
-      el.textContent = state.items.length ? "No matching models." : "No models in this category.";
-      gridEl.appendChild(el);
+      const empty = document.createElement("div");
+      empty.className = "mg-empty";
+      empty.textContent = state.items.length ? "No matching models." : "No models in this category.";
+      gridEl.appendChild(empty);
     }
     setCount(rows.length, state.items.length);
   }
@@ -834,25 +943,6 @@ function openPicker(widget, node) {
       placeholder.replaceWith(buildDetail(meta));
     });
   }
-  function commit(value) {
-    try {
-      const values = widget.options?.values;
-      if (Array.isArray(values) && !values.includes(value)) {
-        values.push(value);
-      }
-      widget.value = value;
-      try {
-        widget.callback?.call(widget, value, app.canvas, node);
-      } catch (e) {
-        console.warn(`[${EXT_NAME2}] widget callback threw`, e);
-      }
-      node?.setDirtyCanvas?.(true, true);
-      app.graph?.setDirtyCanvas?.(true, true);
-    } catch (e) {
-      console.warn(`[${EXT_NAME2}] commit failed`, e);
-    }
-    modal.close();
-  }
   function revealCurrentValueMeta() {
     if (!state.currentValue)
       return;
@@ -866,23 +956,90 @@ function openPicker(widget, node) {
       }
     });
   }
-  modal.setBusy(true);
-  modal.setStatus("Loading…");
-  Promise.all([loadCorpus(), fetchListing(category)]).then(([, items]) => {
-    state.items = items;
-    state.chips = subfolderChips(items);
-    modal.setStatus("");
-  }).catch((e) => {
-    console.warn(`[${EXT_NAME2}] list failed for ${category}`, e);
-    state.items = [];
-    state.chips = [];
-    modal.setStatus(`Error: ${e.message}`);
-  }).finally(() => {
-    modal.setBusy(false);
-    renderChips();
-    renderGrid();
-    revealCurrentValueMeta();
+  function load() {
+    setBusy(true);
+    setStatus("Loading…");
+    Promise.all([loadCorpus(), fetchListing(category)]).then(([, items]) => {
+      state.items = items;
+      state.chips = subfolderChips(items);
+      setStatus("");
+    }).catch((e) => {
+      console.warn(`[${EXT_NAME2}] list failed for ${category}`, e);
+      state.items = [];
+      state.chips = [];
+      setStatus(`Error: ${e.message}`);
+    }).finally(() => {
+      setBusy(false);
+      renderChips();
+      renderGrid();
+      revealCurrentValueMeta();
+    });
+  }
+  function destroy() {
+    searchEl.removeEventListener("input", onSearchInput);
+    chipsEl.removeEventListener("click", onChipsClick);
+    gridEl.removeEventListener("click", onGridClick);
+    el.remove();
+  }
+  return {
+    el,
+    chipsEl,
+    gridEl,
+    countEl,
+    getValue: () => state.currentValue,
+    hasChanged: () => state.currentValue !== initialValue,
+    focus: () => searchEl.focus(),
+    destroy,
+    load
+  };
+}
+function commitToWidget(widget, node, value) {
+  try {
+    const values = widget.options?.values;
+    if (Array.isArray(values) && !values.includes(value)) {
+      values.push(value);
+    }
+    widget.value = value;
+    try {
+      widget.callback?.call(widget, value, app.canvas, node);
+    } catch (e) {
+      console.warn(`[${EXT_NAME2}] widget callback threw`, e);
+    }
+    node?.setDirtyCanvas?.(true, true);
+    app.graph?.setDirtyCanvas?.(true, true);
+  } catch (e) {
+    console.warn(`[${EXT_NAME2}] commit failed`, e);
+  }
+}
+function openPicker(widget, node) {
+  const category = categoryForWidget(widget);
+  if (!category)
+    return;
+  const modal = openModalShell({
+    title: "Choose model",
+    subtitle: `(${widget.name})`,
+    placeholder: "Filter by name…",
+    width: "min(1100px, calc(100vw - 16px))",
+    height: "min(88vh, 820px)",
+    footerLeftHTML: "<kbd>Esc</kbd> close · tap a card to select",
+    footerRightHTML: ""
   });
+  const view = createGallery({
+    category,
+    initialValue: (widget.value ?? "").toString(),
+    searchEl: modal.searchEl,
+    setBusy: modal.setBusy,
+    setStatus: modal.setStatus,
+    onSelect: (value) => {
+      commitToWidget(widget, node, value);
+      view.destroy();
+      modal.close();
+    }
+  });
+  modal.toolbarEl.appendChild(view.chipsEl);
+  modal.bodyEl.appendChild(view.gridEl);
+  modal.footerEl.appendChild(view.countEl);
+  view.load();
 }
 function tooltipName(value) {
   return (value ?? "").toString().replace(/\\/g, "/").split("/").pop() ?? "";
@@ -950,21 +1107,10 @@ function enhanceNode(node) {
       }
       return r;
     };
-    const origDown = w.onPointerDown;
-    w.onPointerDown = function(pointer, ownerNode, canvas) {
-      try {
-        if (typeof origDown === "function") {
-          const consumed = origDown.call(this, pointer, ownerNode, canvas);
-          if (consumed)
-            return consumed;
-        }
-        openPicker(w, ownerNode || node);
-        return true;
-      } catch (e) {
-        console.warn(`[${EXT_NAME2}] picker open failed`, e);
-        return false;
-      }
-    };
+    patchWidgetPointer(w, (_pointer, ownerNode) => {
+      openPicker(w, ownerNode || node);
+      return true;
+    });
   }
 }
 var PICKER_CSS = `
@@ -1153,12 +1299,45 @@ var PICKER_CSS = `
     font-size: 10px;
     color: #c0c0c8;
 }
+/* Inline field-provider layout: the gallery mounted in a kit editor's field
+   row (no modal shell chrome). Renders its own search box + footer. */
+.mg-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.mg-search {
+    box-sizing: border-box;
+    width: 100%;
+    /* >=16px avoids iOS focus zoom (touch-first). */
+    font-size: 16px;
+    padding: 8px 10px;
+    background: #21212a;
+    color: #e8e8ea;
+    border: 1px solid #3a3a44;
+    border-radius: 6px;
+    font-family: inherit;
+}
+.mg-search:focus {
+    outline: none;
+    border-color: #6ba6ff;
+}
+.mg-inline-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    color: #888;
+}
+.mg-status {
+    font-style: italic;
+}
 `;
-function ensureStyle2() {
-  if (document.getElementById(STYLE_ID2))
+function ensureStyle() {
+  if (document.getElementById(STYLE_ID))
     return;
   const s = document.createElement("style");
-  s.id = STYLE_ID2;
+  s.id = STYLE_ID;
   s.textContent = PICKER_CSS;
   document.head.appendChild(s);
 }
@@ -1190,6 +1369,33 @@ try {
   });
 } catch (e) {
   console.warn(`[${EXT_NAME2}] registerExtension failed`, e);
+}
+try {
+  registerFieldProvider({
+    id: "comfyui-model-gallery:combo",
+    priority: 10,
+    match: (widget) => {
+      const w = widget;
+      return categoryForWidget(w) !== null && isComboWidget(w);
+    },
+    create: ({ widget, initialValue }) => {
+      const w = widget;
+      const view = createGallery({
+        category: categoryForWidget(w) ?? "",
+        initialValue: (initialValue ?? w.value ?? "").toString()
+      });
+      view.load();
+      return {
+        el: view.el,
+        getValue: () => view.getValue(),
+        hasChanged: () => view.hasChanged(),
+        focus: () => view.focus(),
+        destroy: () => view.destroy()
+      };
+    }
+  });
+} catch (e) {
+  console.warn(`[${EXT_NAME2}] field provider registration failed`, e);
 }
 export {
   topLevelSubfolder,
