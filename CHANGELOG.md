@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.12...comfyui-model-gallery-v0.1.13) (2026-07-04)
+
+
+### Bug Fixes
+
+* **instrumentation:** route model-listing failure through copyable notify() ([#41](https://github.com/laurigates/comfyui-model-gallery/issues/41)) ([491977b](https://github.com/laurigates/comfyui-model-gallery/commit/491977bb1731d43255994e9f0bc64abefc7e30b0))
+
 ## [0.1.12](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.11...comfyui-model-gallery-v0.1.12) (2026-07-02)
 
 
