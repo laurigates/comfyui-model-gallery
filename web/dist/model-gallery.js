@@ -1590,7 +1590,7 @@ try {
 }
 try {
   registerFieldProvider({
-    id: "comfyui-model-gallery:combo",
+    id: "model-gallery:combo",
     priority: 10,
     match: (widget) => {
       const w = widget;
