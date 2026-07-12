@@ -25,21 +25,25 @@ v0.1 surface:
       arbitrary caller path — so a crafted ?name= cannot escape the category
       roots folder_paths already vetted.
 
+  - GET /model_gallery/hash?category=<cat>&name=<name>
+      Return a file's SHA256 checksum: the author-embedded hash verbatim when
+      the safetensors header carries one (free), else a streamed full-file
+      digest (GBs of disk I/O, cached by path+mtime+size, computed off the
+      event loop). Same folder_paths-only path resolution as /meta. This is an
+      EXPLICIT, on-demand read — the frontend only calls it when the user taps
+      "Compute", keeping /list and /meta cheap. Stays offline: no outbound
+      network (a Civitai by-hash lookup on top remains deferred).
+
   - GET /model_gallery/thumb  (v0.2 — sibling-preview thumbnails)
       Stubbed: returns 404. The ALLOWED_EXTENSIONS whitelist below is the
       security perimeter for when this lands — an arbitrary-path read MUST
       gate on it. Kept here so the security contract is visible from day one.
-
-Deferred (tier 3, not implemented): a hash → Civitai by-hash lookup would
-identify a file authoritatively even with no embedded metadata, but it needs
-a full-file SHA256 (GBs of disk I/O, must be cached) plus outbound network to
-a third party (privacy + offline concerns). It is intentionally left out of
-this offline-by-default surface; add it behind an explicit opt-in if wanted.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -75,6 +79,12 @@ SAFETENSORS_HEADER_MAX = 64 * 1024 * 1024
 _META_CACHE: dict[tuple[str, float, int], dict[str, Any]] = {}
 _META_CACHE_MAX = 4096
 
+# Same bounding for computed SHA256 digests. Hashing a multi-GB file is
+# expensive, so a re-request for an unchanged file must never re-read it.
+# Keyed on (path, mtime, size) — any on-disk change invalidates the entry.
+_HASH_CACHE: dict[tuple[str, float, int], str] = {}
+_HASH_CACHE_MAX = 4096
+
 # folder_paths categories this pack is willing to enumerate. This is a
 # guard, not the source of truth — the frontend maps widget names to these
 # strings, and folder_paths.get_filename_list is the authority on contents.
@@ -98,25 +108,27 @@ KNOWN_CATEGORIES = {
 }
 
 
-def _resolve_mtime(category: str, name: str) -> float | None:
-    """Return the mtime of the on-disk file backing ``name`` in ``category``.
+def _stat_file(category: str, name: str) -> tuple[float | None, int | None]:
+    """Return ``(mtime, size)`` of the on-disk file backing ``name``, or Nones.
 
     ``folder_paths.get_full_path`` searches every registered root for the
-    category and returns the first match (or None). Returns None when the
-    file can't be stat'd — a broken symlink, a race with deletion, or a
-    registry/disk mismatch — so the caller can still surface the entry
-    without a timestamp rather than dropping it.
+    category and returns the first match (or None). A single ``os.stat`` yields
+    both fields, so the listing doesn't stat twice. Returns ``(None, None)``
+    when the file can't be stat'd — a broken symlink, a race with deletion, or
+    a registry/disk mismatch — so the caller can still surface the entry
+    without a timestamp/size rather than dropping it.
     """
     try:
         full = folder_paths.get_full_path(category, name)
     except Exception:  # folder_paths can raise on an unknown category
-        return None
+        return None, None
     if not full:
-        return None
+        return None, None
     try:
-        return os.stat(full).st_mtime
+        st = os.stat(full)
     except OSError:
-        return None
+        return None, None
+    return st.st_mtime, st.st_size
 
 
 def _split_subfolder(name: str) -> tuple[str, str]:
@@ -202,13 +214,14 @@ def _top_tags(raw: Any, limit: int = 12) -> list[str]:
     return [tag for tag, _ in ordered[:limit]]
 
 
-def _read_safetensors_metadata(path: str) -> dict[str, Any] | None:
-    """Return the ``__metadata__`` map from a safetensors header, or None.
+def _read_safetensors_header(path: str) -> dict[str, Any] | None:
+    """Return the full safetensors header dict, or None on a structural problem.
 
     Reads ONLY the header (8-byte little-endian length + that many JSON bytes),
-    never the tensor payload, so it's a small read regardless of file size.
-    Returns None on any structural problem (truncated, oversize, non-JSON) and
-    {} when the header is valid but carries no __metadata__.
+    never the tensor payload, so it's a small read regardless of file size. The
+    returned dict maps each tensor name to ``{dtype, shape, data_offsets}`` and
+    (optionally) carries a ``__metadata__`` entry. Returns None on any
+    structural problem (truncated, oversize, non-JSON).
     """
     with open(path, "rb") as fh:
         size_bytes = fh.read(8)
@@ -224,10 +237,82 @@ def _read_safetensors_metadata(path: str) -> dict[str, Any] | None:
         header = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         return None
-    if not isinstance(header, dict):
+    return header if isinstance(header, dict) else None
+
+
+def _read_safetensors_metadata(path: str) -> dict[str, Any] | None:
+    """Return the ``__metadata__`` map from a safetensors header, or None.
+
+    Thin wrapper over :func:`_read_safetensors_header`: None on a structural
+    problem, {} when the header is valid but carries no __metadata__.
+    """
+    header = _read_safetensors_header(path)
+    if header is None:
         return None
     meta = header.get("__metadata__")
     return meta if isinstance(meta, dict) else {}
+
+
+# safetensors dtype code -> friendly precision label. Weighting is by element
+# count so the dominant precision (what actually governs VRAM) wins. Unknown
+# codes surface verbatim rather than vanishing.
+_DTYPE_LABELS = {
+    "F64": "fp64",
+    "F32": "fp32",
+    "F16": "fp16",
+    "BF16": "bf16",
+    "F8_E4M3": "fp8 (e4m3)",
+    "F8_E5M2": "fp8 (e5m2)",
+    "I64": "int64",
+    "I32": "int32",
+    "I16": "int16",
+    "I8": "int8",
+    "U8": "uint8",
+    "BOOL": "bool",
+}
+
+
+def _friendly_dtype(code: str) -> str:
+    """Map a safetensors dtype code to a friendly precision label."""
+    return _DTYPE_LABELS.get(code, code)
+
+
+def _tensor_stats(header: dict[str, Any]) -> dict[str, Any]:
+    """Derive ``{params, dtype}`` from a safetensors header's tensor entries.
+
+    ``params`` is the total element count summed across every tensor (skipping
+    the ``__metadata__`` entry). ``dtype`` is the precision covering the most
+    elements — the one that dominates VRAM footprint — as a friendly label.
+    Returns {} when the header carries no usable tensor entries; never raises
+    (one malformed entry is skipped, not fatal).
+    """
+    total = 0
+    by_dtype: dict[str, int] = {}
+    for key, spec in header.items():
+        if key == "__metadata__" or not isinstance(spec, dict):
+            continue
+        shape = spec.get("shape")
+        if not isinstance(shape, list):
+            continue
+        count = 1
+        for dim in shape:
+            if not isinstance(dim, int) or dim < 0:
+                count = 0
+                break
+            count *= dim
+        if count <= 0:
+            continue
+        total += count
+        code = spec.get("dtype")
+        if isinstance(code, str):
+            by_dtype[code] = by_dtype.get(code, 0) + count
+    out: dict[str, Any] = {}
+    if total > 0:
+        out["params"] = total
+    if by_dtype:
+        dominant = max(by_dtype.items(), key=lambda kv: (kv[1], kv[0]))[0]
+        out["dtype"] = _friendly_dtype(dominant)
+    return out
 
 
 def _curate_metadata(meta: dict[str, Any]) -> dict[str, Any]:
@@ -285,21 +370,30 @@ def _curate_metadata(meta: dict[str, Any]) -> dict[str, Any]:
 def _read_curated_metadata(path: str) -> dict[str, Any]:
     """Header-read + curate for one file. Synchronous (run off the event loop).
 
-    Never raises into the caller: any read error degrades to {} so the endpoint
-    reports "no embedded metadata" rather than failing.
+    Reads the header ONCE and derives both the curated ``__metadata__`` subset
+    (base/title/tags/...) and the tensor-derived ``params``/``dtype`` (precision
+    that governs VRAM). Never raises into the caller: any read error degrades to
+    {} so the endpoint reports "no embedded metadata" rather than failing.
     """
     try:
-        meta = _read_safetensors_metadata(path)
+        header = _read_safetensors_header(path)
     except OSError as exc:
         log.warning("safetensors header read failed for %s: %s", path, exc)
         return {}
-    if not meta:
+    if not header:
         return {}
+    out: dict[str, Any] = {}
     try:
-        return _curate_metadata(meta)
-    except Exception:  # one weird value must not sink the whole read
-        log.warning("metadata curation failed for %s", path, exc_info=True)
-        return {}
+        out.update(_tensor_stats(header))
+    except Exception:  # tensor introspection must not sink the metadata read
+        log.warning("tensor stats failed for %s", path, exc_info=True)
+    meta = header.get("__metadata__")
+    if isinstance(meta, dict) and meta:
+        try:
+            out.update(_curate_metadata(meta))
+        except Exception:  # one weird value must not sink the whole read
+            log.warning("metadata curation failed for %s", path, exc_info=True)
+    return out
 
 
 def _meta_cache_put(key: tuple[str, float, int], value: dict[str, Any]) -> None:
@@ -311,6 +405,26 @@ def _meta_cache_put(key: tuple[str, float, int], value: dict[str, Any]) -> None:
     _META_CACHE[key] = value
 
 
+def _hash_cache_put(key: tuple[str, float, int], value: str) -> None:
+    """Insert into the bounded hash cache, evicting an arbitrary entry if full."""
+    if len(_HASH_CACHE) >= _HASH_CACHE_MAX:
+        _HASH_CACHE.pop(next(iter(_HASH_CACHE)), None)
+    _HASH_CACHE[key] = value
+
+
+def _sha256_file(path: str, chunk_size: int = 1024 * 1024) -> str:
+    """Stream a file through SHA256 in chunks and return the lowercase hex digest.
+
+    Chunked so a multi-GB model never loads whole into memory. Blocking I/O —
+    the caller runs it off the event loop. Raises OSError on a read failure.
+    """
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(chunk_size), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
 @PromptServer.instance.routes.get("/model_gallery/list")
 async def model_list(request: web.Request) -> web.Response:
     """List the files in a folder_paths category for the picker modal.
@@ -319,9 +433,11 @@ async def model_list(request: web.Request) -> web.Response:
       category — a folder_paths category ("loras", "checkpoints", ...).
 
     Returns {"ok": True, "category": ..., "items": [{name, subfolder,
-    mtime}, ...]}. ``name`` is the EXACT string folder_paths.get_filename_list
-    returns — i.e. the value the native combo uses. The frontend writes that
-    back verbatim (value contract: don't churn workflows).
+    mtime, size}, ...]}. ``name`` is the EXACT string
+    folder_paths.get_filename_list returns — i.e. the value the native combo
+    uses. The frontend writes that back verbatim (value contract: don't churn
+    workflows). ``mtime``/``size`` are None when the file can't be stat'd. The
+    single stat per file is metadata only — /list never reads file contents.
     """
     category = request.rel_url.query.get("category", "")
     if not category:
@@ -341,11 +457,13 @@ async def model_list(request: web.Request) -> web.Response:
     for name in names:
         try:
             subfolder, _basename = _split_subfolder(name)
+            mtime, size = _stat_file(category, name)
             items.append(
                 {
                     "name": name,  # exact combo value — do NOT normalise
                     "subfolder": subfolder,
-                    "mtime": _resolve_mtime(category, name),
+                    "mtime": mtime,
+                    "size": size,
                 }
             )
         except Exception:  # one bad entry must not drop the whole listing
@@ -409,9 +527,80 @@ async def model_meta(request: web.Request) -> web.Response:
         meta = await asyncio.get_event_loop().run_in_executor(None, _read_curated_metadata, full)
         _meta_cache_put(cache_key, meta)
 
+    # Size comes from the stat we already did (it's part of the cache key), so
+    # it's free. Merge into a fresh dict so the cached meta stays size-free.
+    out_meta = {**meta, "size": stat.st_size}
     return web.json_response(
-        {"ok": True, "supported": True, "format": "safetensors", "meta": meta}
+        {"ok": True, "supported": True, "format": "safetensors", "meta": out_meta}
     )
+
+
+@PromptServer.instance.routes.get("/model_gallery/hash")
+async def model_hash(request: web.Request) -> web.Response:
+    """Compute (or read) the SHA256 checksum of one model file, on demand.
+
+    Query params:
+      category — a folder_paths category ("loras", "checkpoints", ...).
+      name     — the EXACT folder_paths combo value (may include a subfolder).
+
+    Returns {"ok": True, "sha256": <hex>, "source": "embedded"|"computed"}.
+    When the file's safetensors header already carries an author-written hash we
+    return it verbatim (no I/O); otherwise we stream the full file through
+    hashlib in chunks. Full-file hashing is GB-scale disk I/O, so it runs off
+    the event loop and is cached by (path, mtime, size) — the frontend only
+    reaches this endpoint when the user explicitly taps "Compute".
+
+    Security: identical to /meta — the path is resolved ONLY via
+    folder_paths.get_full_path against a whitelisted category, so ?name= can't
+    read outside the registered roots.
+    """
+    category = request.rel_url.query.get("category", "")
+    name = request.rel_url.query.get("name", "")
+    if not category or not name:
+        return web.json_response({"ok": False, "error": "missing category or name"}, status=400)
+    if category not in KNOWN_CATEGORIES:
+        return web.json_response(
+            {"ok": False, "error": f"unknown category: {category}"}, status=400
+        )
+
+    try:
+        full = folder_paths.get_full_path(category, name)
+    except Exception as exc:  # folder_paths can raise on a bad category/name
+        log.warning("get_full_path(%s, %s) failed: %s", category, name, exc)
+        full = None
+    if not full:
+        return web.json_response({"ok": False, "error": "not found"}, status=404)
+
+    try:
+        stat = os.stat(full)
+    except OSError:
+        return web.json_response({"ok": False, "error": "not found"}, status=404)
+
+    # Prefer an author-embedded hash — authoritative and free (no file read).
+    ext = os.path.splitext(full)[1].lower()
+    if ext in SAFETENSORS_EXTENSIONS:
+        try:
+            embedded = _read_curated_metadata(full).get("sha256")
+        except Exception:  # never let a header read sink the endpoint
+            embedded = None
+        if isinstance(embedded, str) and embedded:
+            return web.json_response(
+                {"ok": True, "sha256": embedded.lower(), "source": "embedded"}
+            )
+
+    cache_key = (full, stat.st_mtime, stat.st_size)
+    digest = _HASH_CACHE.get(cache_key)
+    if digest is None:
+        try:
+            digest = await asyncio.get_event_loop().run_in_executor(
+                None, _sha256_file, full
+            )
+        except OSError as exc:
+            log.warning("hash read failed for %s: %s", full, exc)
+            return web.json_response({"ok": False, "error": "read failed"}, status=500)
+        _hash_cache_put(cache_key, digest)
+
+    return web.json_response({"ok": True, "sha256": digest, "source": "computed"})
 
 
 @PromptServer.instance.routes.get("/model_gallery/thumb")

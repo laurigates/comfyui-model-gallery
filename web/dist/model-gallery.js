@@ -751,13 +751,48 @@ function formatTooltip(name, info) {
   return lines.join(`
 `).trim();
 }
+function formatBytes(n) {
+  if (typeof n !== "number" || !Number.isFinite(n) || n < 0)
+    return "";
+  if (n < 1024)
+    return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB", "PB"];
+  let val = n / 1024;
+  let i = 0;
+  while (val >= 1024 && i < units.length - 1) {
+    val /= 1024;
+    i += 1;
+  }
+  const decimals = i >= 1 ? 2 : 0;
+  return `${val.toFixed(decimals)} ${units[i]}`;
+}
+function formatParams(n) {
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0)
+    return "";
+  if (n >= 1000000000000)
+    return `${(n / 1000000000000).toFixed(2)}T`;
+  if (n >= 1e9)
+    return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6)
+    return `${Math.round(n / 1e6)}M`;
+  if (n >= 1000)
+    return `${Math.round(n / 1000)}K`;
+  return String(n);
+}
 
 // src/model-gallery.ts
 var EXT_NAME2 = "comfyui-model-gallery";
 var LIST_URL = "/model_gallery/list";
 var META_URL = "/model_gallery/meta";
+var HASH_URL = "/model_gallery/hash";
 var CORPUS_URL = `/extensions/${EXT_NAME2}/data/models.json`;
 var STYLE_ID3 = "mg-style";
+function formatLabelOf(name) {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0 || dot === name.length - 1)
+    return "";
+  return name.slice(dot + 1).toUpperCase();
+}
 var CORPUS = { exact: {}, prefix: [] };
 var CORPUS_LOADED = false;
 async function loadCorpus() {
@@ -798,6 +833,18 @@ async function fetchMeta(category, name) {
   }
   META_CACHE.set(key, result);
   return result;
+}
+async function fetchHash(category, name) {
+  try {
+    const url = `${HASH_URL}?category=${encodeURIComponent(category)}&name=${encodeURIComponent(name)}`;
+    const r = await fetch(url, { cache: "no-cache" });
+    const data = await r.json();
+    if (data?.ok && typeof data.sha256 === "string")
+      return data.sha256;
+  } catch (e) {
+    console.warn(`[${EXT_NAME2}] hash fetch failed for ${name}`, e);
+  }
+  return null;
 }
 var WIDGET_CATEGORY = new Map([
   ["lora_name", "loras"],
@@ -1022,6 +1069,10 @@ function createGallery(opts) {
     const card = document.createElement("div");
     card.className = "mg-card";
     card.dataset.value = item.name;
+    if (typeof item.size === "number")
+      card.dataset.size = String(item.size);
+    if (typeof item.mtime === "number")
+      card.dataset.mtime = String(item.mtime);
     if (item.name === state.currentValue)
       card.classList.add("is-selected");
     const sub = (item.subfolder || "").replace(/\\/g, "/");
@@ -1045,9 +1096,32 @@ function createGallery(opts) {
     infoBtn.title = "Read embedded file metadata";
     const metaEl = document.createElement("div");
     metaEl.className = "mg-card-meta";
-    metaEl.textContent = item.mtime ? new Date(item.mtime * 1000).toLocaleDateString() : "";
+    const sizeStr = formatBytes(item.size);
+    const dateStr = item.mtime ? new Date(item.mtime * 1000).toLocaleDateString() : "";
+    if (sizeStr) {
+      const s = document.createElement("span");
+      s.className = "mg-card-size";
+      s.textContent = sizeStr;
+      metaEl.appendChild(s);
+    }
+    if (dateStr) {
+      if (sizeStr)
+        metaEl.appendChild(document.createTextNode(" · "));
+      metaEl.appendChild(document.createTextNode(dateStr));
+    }
     card.append(infoBtn, subEl, nameEl);
-    const badgesEl = buildBadges(info);
+    let badgesEl = buildBadges(info);
+    const fmt = formatLabelOf(item.name);
+    if (fmt) {
+      if (!badgesEl) {
+        badgesEl = document.createElement("div");
+        badgesEl.className = "mg-badges";
+      }
+      const b = document.createElement("span");
+      b.className = "mg-badge mg-badge-format";
+      b.textContent = fmt;
+      badgesEl.appendChild(b);
+    }
     if (badgesEl)
       card.append(badgesEl);
     if (info?.summary) {
@@ -1060,7 +1134,7 @@ function createGallery(opts) {
     const cached = META_CACHE.get(metaKey(category, item.name));
     if (cached) {
       card.classList.add("mg-expanded");
-      card.append(buildDetail(cached));
+      card.append(buildDetail(cached, { size: item.size, mtime: item.mtime }));
     }
     return card;
   }
@@ -1083,30 +1157,94 @@ function createGallery(opts) {
     add(info.type, "mg-badge-type");
     return wrap.childElementCount ? wrap : null;
   }
-  function buildDetail(meta) {
+  function shaValueNode(hash) {
+    const wrap = document.createElement("span");
+    wrap.className = "mg-hash";
+    const val = document.createElement("span");
+    val.className = "mg-hash-val";
+    val.title = hash;
+    val.textContent = `${hash.slice(0, 12)}…`;
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "mg-hash-btn";
+    copy.textContent = "Copy";
+    copy.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const ok = await copyTextToClipboard(hash);
+      notify({
+        severity: ok ? "success" : "error",
+        summary: ok ? "Checksum copied" : "Copy failed"
+      });
+    });
+    wrap.append(val, copy);
+    return wrap;
+  }
+  function buildChecksumRow(meta, name) {
+    const r = document.createElement("div");
+    r.className = "mg-detail-row mg-detail-hashrow";
+    const kk = document.createElement("strong");
+    kk.textContent = "SHA256: ";
+    r.appendChild(kk);
+    if (meta?.sha256) {
+      r.appendChild(shaValueNode(String(meta.sha256)));
+      return r;
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "mg-hash-btn";
+    btn.textContent = "Compute";
+    btn.title = "Hash the full file (may take a moment for large models)";
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (!name)
+        return;
+      btn.disabled = true;
+      btn.textContent = "Computing…";
+      fetchHash(category, name).then((hash) => {
+        if (!btn.isConnected)
+          return;
+        if (hash) {
+          btn.replaceWith(shaValueNode(hash));
+        } else {
+          btn.disabled = false;
+          btn.textContent = "Compute";
+          notify({ severity: "error", summary: "Checksum failed" });
+        }
+      });
+    });
+    r.appendChild(btn);
+    return r;
+  }
+  function buildDetail(meta, ctx = {}) {
     const d = document.createElement("div");
     d.className = "mg-detail";
-    if (!meta) {
-      d.classList.add("mg-detail-empty");
-      d.textContent = "No embedded metadata.";
-      return d;
-    }
-    const head = document.createElement("div");
-    head.className = "mg-detail-head";
-    head.textContent = "From file metadata";
-    d.appendChild(head);
     const rows = [];
-    if (meta.base)
+    if (meta?.dtype)
+      rows.push(["Precision", String(meta.dtype)]);
+    if (typeof meta?.params === "number") {
+      const p = formatParams(meta.params);
+      if (p)
+        rows.push(["Params", p]);
+    }
+    const size = typeof ctx.size === "number" ? ctx.size : meta?.size;
+    if (typeof size === "number") {
+      const human = formatBytes(size);
+      rows.push(["Size", human ? `${human} (${size.toLocaleString()} bytes)` : `${size} bytes`]);
+    }
+    if (typeof ctx.mtime === "number") {
+      rows.push(["Modified", new Date(ctx.mtime * 1000).toLocaleString()]);
+    }
+    if (meta?.base)
       rows.push(["Base", String(meta.base)]);
-    if (meta.title)
+    if (meta?.title)
       rows.push(["Title", String(meta.title)]);
-    if (meta.network_module)
+    if (meta?.network_module)
       rows.push(["Network", String(meta.network_module)]);
-    if (meta.rank)
+    if (meta?.rank)
       rows.push(["Rank", meta.alpha ? `${meta.rank} / α ${meta.alpha}` : String(meta.rank)]);
-    else if (meta.alpha)
+    else if (meta?.alpha)
       rows.push(["Alpha", String(meta.alpha)]);
-    if (meta.resolution)
+    if (meta?.resolution)
       rows.push(["Trained", String(meta.resolution)]);
     for (const [k, v] of rows) {
       const r = document.createElement("div");
@@ -1116,7 +1254,9 @@ function createGallery(opts) {
       r.append(kk, document.createTextNode(v));
       d.appendChild(r);
     }
-    if (Array.isArray(meta.tags) && meta.tags.length) {
+    if (ctx.name)
+      d.appendChild(buildChecksumRow(meta, ctx.name));
+    if (meta && Array.isArray(meta.tags) && meta.tags.length) {
       const t = document.createElement("div");
       t.className = "mg-tags";
       for (const tag of meta.tags) {
@@ -1127,13 +1267,26 @@ function createGallery(opts) {
       }
       d.appendChild(t);
     }
-    if (meta.description) {
+    if (meta?.description) {
       const ds = document.createElement("div");
       ds.className = "mg-detail-desc";
       ds.textContent = meta.description;
       d.appendChild(ds);
     }
+    if (d.childElementCount === 0) {
+      d.classList.add("mg-detail-empty");
+      d.textContent = "No embedded metadata.";
+    }
     return d;
+  }
+  function ctxOf(card) {
+    const size = Number(card.dataset.size);
+    const mtime = Number(card.dataset.mtime);
+    return {
+      name: card.dataset.value,
+      size: Number.isFinite(size) && card.dataset.size ? size : undefined,
+      mtime: Number.isFinite(mtime) && card.dataset.mtime ? mtime : undefined
+    };
   }
   function toggleDetail(card) {
     if (!card)
@@ -1146,6 +1299,7 @@ function createGallery(opts) {
     }
     card.classList.add("mg-expanded");
     const name = card.dataset.value ?? "";
+    const ctx = ctxOf(card);
     const placeholder = document.createElement("div");
     placeholder.className = "mg-detail mg-detail-loading";
     placeholder.textContent = "Reading metadata…";
@@ -1153,7 +1307,7 @@ function createGallery(opts) {
     fetchMeta(category, name).then((meta) => {
       if (!placeholder.isConnected)
         return;
-      placeholder.replaceWith(buildDetail(meta));
+      placeholder.replaceWith(buildDetail(meta, ctx));
     });
   }
   function revealCurrentValueMeta() {
@@ -1165,7 +1319,7 @@ function createGallery(opts) {
       const card = gridEl.querySelector(".mg-card.is-selected");
       if (card && !card.querySelector(".mg-detail")) {
         card.classList.add("mg-expanded");
-        card.append(buildDetail(meta));
+        card.append(buildDetail(meta, ctxOf(card)));
       }
     });
   }
@@ -1405,6 +1559,10 @@ var PICKER_CSS = `
     color: #888;
     margin-top: auto;
 }
+.mg-card-size {
+    color: #b8b8c0;
+    font-weight: 600;
+}
 .mg-empty {
     grid-column: 1 / -1;
     padding: 40px;
@@ -1465,6 +1623,7 @@ var PICKER_CSS = `
 .mg-badge-base { color: #9ec6ff; border-color: #2a3a4a; }
 .mg-badge-family { color: #c8a8ff; border-color: #3a2e4a; }
 .mg-badge-type { color: #b8c8a8; border-color: #2e3a2a; }
+.mg-badge-format { color: #d0b088; border-color: #4a3e28; }
 .mg-card-summary {
     font-size: 11px;
     color: #9aa0ad;
@@ -1499,6 +1658,41 @@ var PICKER_CSS = `
     margin-bottom: 3px;
 }
 .mg-detail-row strong { color: #aaa; font-weight: 600; }
+.mg-detail-hashrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+.mg-hash {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.mg-hash-val {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px;
+    color: #9aa0ad;
+}
+.mg-hash-btn {
+    padding: 1px 8px;
+    border: 1px solid #3a3a44;
+    border-radius: 4px;
+    background: #2a2a36;
+    color: #9ec6ff;
+    font-size: 10.5px;
+    font-family: inherit;
+    cursor: pointer;
+    line-height: 1.5;
+}
+.mg-hash-btn:hover:not(:disabled) {
+    border-color: #4a5878;
+    color: #bcd8ff;
+}
+.mg-hash-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
 .mg-detail-desc {
     margin-top: 4px;
     color: #9aa0ad;

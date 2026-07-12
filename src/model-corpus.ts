@@ -144,3 +144,38 @@ export function formatTooltip(name: string, info: CorpusEntry | null): string {
   if (info.notes) lines.push("", `Note: ${info.notes}`);
   return lines.join("\n").trim();
 }
+
+/**
+ * Human-readable file size from a byte count. Uses binary units (GiB-scale, the
+ * unit that matters for "does it fit in VRAM") but the familiar GB/MB labels.
+ * Two significant-ish decimals for GB/MB so `flux-dev` reads `23.80 GB`, whole
+ * numbers for bytes/KB. Returns "" for null/undefined/negative so the caller
+ * can omit the field rather than print a bogus size.
+ */
+export function formatBytes(n: number | null | undefined): string {
+  if (typeof n !== "number" || !Number.isFinite(n) || n < 0) return "";
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB", "PB"];
+  let val = n / 1024;
+  let i = 0;
+  while (val >= 1024 && i < units.length - 1) {
+    val /= 1024;
+    i += 1;
+  }
+  const decimals = i >= 1 ? 2 : 0; // MB and up get decimals; KB stays whole
+  return `${val.toFixed(decimals)} ${units[i]}`;
+}
+
+/**
+ * Human-readable parameter count from a raw element total, e.g. 11_901_408_256
+ * -> "11.9B", 340_000_000 -> "340M". This is the number that tells model
+ * variants apart at a glance. Returns "" for null/undefined/non-positive.
+ */
+export function formatParams(n: number | null | undefined): string {
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return "";
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${Math.round(n / 1e6)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}K`;
+  return String(n);
+}

@@ -30,7 +30,7 @@ inlines the kit into the shipped bundle (formerly the vendored
 | Path | Purpose |
 |------|---------|
 | `__init__.py` | Loader stub. Imports node mappings from the backend module; exports `WEB_DIRECTORY = "./web/dist"`. |
-| `model_gallery.py` | Node + HTTP endpoints (`/list`, `/meta`, `/thumb` stub). Bundled libs only; arbitrary-path endpoints gate on an extension whitelist; `/meta` resolves paths only via `folder_paths`. **Unchanged by the TS migration.** |
+| `model_gallery.py` | Node + HTTP endpoints (`/list` incl. size, `/meta` incl. dtype/params/size, `/hash` on-demand checksum, `/thumb` stub). Bundled libs only; arbitrary-path endpoints gate on an extension whitelist; `/meta` + `/hash` resolve paths only via `folder_paths`. |
 | `src/model-gallery.ts` | The extension entry — TypeScript source (port of the former `web/js/model-gallery.js`). Widget interception + modal + corpus/metadata annotation. Compiled to `web/dist/model-gallery.js`. |
 | `src/model-corpus.ts` | Pure corpus helpers (`compileCorpus`/`safeRegex`/`corpusKey`/`lookup`/`corpusFields`/`formatTooltip`). Filename → model info. Imported by the entry; bundled in. |
 | `src/comfyui-shims.d.ts` | Types the `/scripts/app.js` runtime import (see ADR-0001 type-seam notes). |
