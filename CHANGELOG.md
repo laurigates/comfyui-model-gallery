@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.13...comfyui-model-gallery-v0.1.14) (2026-07-12)
+
+
+### Features
+
+* surface file size, precision, params, and checksum on model cards ([aa2bc4b](https://github.com/laurigates/comfyui-model-gallery/commit/aa2bc4b04c90ee606853e026569a08e93408b73c))
+
 ## [0.1.13](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.12...comfyui-model-gallery-v0.1.13) (2026-07-04)
 
 
