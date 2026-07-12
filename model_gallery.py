@@ -592,9 +592,7 @@ async def model_hash(request: web.Request) -> web.Response:
     digest = _HASH_CACHE.get(cache_key)
     if digest is None:
         try:
-            digest = await asyncio.get_event_loop().run_in_executor(
-                None, _sha256_file, full
-            )
+            digest = await asyncio.get_event_loop().run_in_executor(None, _sha256_file, full)
         except OSError as exc:
             log.warning("hash read failed for %s: %s", full, exc)
             return web.json_response({"ok": False, "error": "read failed"}, status=500)
