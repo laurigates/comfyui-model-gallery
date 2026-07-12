@@ -3,6 +3,8 @@ import {
   compileCorpus,
   corpusFields,
   corpusKey,
+  formatBytes,
+  formatParams,
   formatTooltip,
   lookup,
   safeRegex,
@@ -120,5 +122,38 @@ describe("formatTooltip", () => {
 
   it("returns '' when there is no info", () => {
     expect(formatTooltip("x", null)).toBe("");
+  });
+});
+
+describe("formatBytes", () => {
+  it("returns '' for null/undefined/negative", () => {
+    expect(formatBytes(null)).toBe("");
+    expect(formatBytes(undefined)).toBe("");
+    expect(formatBytes(-1)).toBe("");
+  });
+
+  it("shows raw bytes under 1 KiB", () => {
+    expect(formatBytes(0)).toBe("0 B");
+    expect(formatBytes(512)).toBe("512 B");
+  });
+
+  it("uses whole KB and decimal MB/GB", () => {
+    expect(formatBytes(2048)).toBe("2 KB");
+    expect(formatBytes(5 * 1024 * 1024)).toBe("5.00 MB");
+    expect(formatBytes(Math.round(6.46 * 1024 * 1024 * 1024))).toBe("6.46 GB");
+  });
+});
+
+describe("formatParams", () => {
+  it("returns '' for null/undefined/non-positive", () => {
+    expect(formatParams(null)).toBe("");
+    expect(formatParams(0)).toBe("");
+  });
+
+  it("scales to K/M/B/T", () => {
+    expect(formatParams(512)).toBe("512");
+    expect(formatParams(340_000_000)).toBe("340M");
+    expect(formatParams(11_901_408_256)).toBe("11.9B");
+    expect(formatParams(2_000_000_000_000)).toBe("2.00T");
   });
 });
