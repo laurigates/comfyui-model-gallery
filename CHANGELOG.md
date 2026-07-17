@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.15](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.14...comfyui-model-gallery-v0.1.15) (2026-07-17)
+
+
+### Bug Fixes
+
+* **registry:** shrink registry tarball scan surface + hygiene guard ([#48](https://github.com/laurigates/comfyui-model-gallery/issues/48)) ([266f373](https://github.com/laurigates/comfyui-model-gallery/commit/266f37365a76b22cf84f4446b86045265158b905))
+
 ## [0.1.14](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.13...comfyui-model-gallery-v0.1.14) (2026-07-12)
 
 
