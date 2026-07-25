@@ -140,9 +140,40 @@ export function formatTooltip(name: string, info: CorpusEntry | null): string {
   if (info.family && info.family !== info.base) headerBits.push(info.family);
   const lines = [headerBits.join(" · "), ""];
   if (info.summary) lines.push(info.summary);
+  // Trigger words come from the embedded-metadata upgrade (the caller merges
+  // the /meta read over the corpus entry). For a LoRA they are the single most
+  // useful thing to see without opening the picker — what to type in the prompt.
+  const triggers = triggerList(info);
+  if (triggers.length) lines.push("", `Triggers: ${triggers.join(", ")}`);
   if (info.good_for) lines.push("", `Good for: ${info.good_for}`);
   if (info.notes) lines.push("", `Note: ${info.notes}`);
   return lines.join("\n").trim();
+}
+
+/**
+ * The entry's trigger words as a clean string array. The field arrives from the
+ * backend (never the corpus), so it's typed `unknown` here — non-arrays, and
+ * non-string or blank members, are dropped rather than rendered as "[object
+ * Object]". Returns [] when the file declares no triggers.
+ */
+export function triggerList(info: CorpusEntry | null | undefined): string[] {
+  const raw = info?.triggers;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((t): t is string => typeof t === "string")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Format a LoRA's effective weight scale (alpha / rank) for display, e.g. 0.5
+ * -> "0.5", 0.0625 -> "0.0625", 1 -> "1". Trailing zeros are trimmed so the
+ * common halves/quarters read cleanly. Returns "" for a non-finite or negative
+ * value so the caller omits the field.
+ */
+export function formatScale(n: number | null | undefined): string {
+  if (typeof n !== "number" || !Number.isFinite(n) || n < 0) return "";
+  return String(Number(n.toFixed(4)));
 }
 
 /**
