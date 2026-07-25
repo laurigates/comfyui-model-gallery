@@ -746,12 +746,26 @@ function formatTooltip(name, info) {
   const lines = [headerBits.join(" · "), ""];
   if (info.summary)
     lines.push(info.summary);
+  const triggers = triggerList(info);
+  if (triggers.length)
+    lines.push("", `Triggers: ${triggers.join(", ")}`);
   if (info.good_for)
     lines.push("", `Good for: ${info.good_for}`);
   if (info.notes)
     lines.push("", `Note: ${info.notes}`);
   return lines.join(`
 `).trim();
+}
+function triggerList(info) {
+  const raw = info?.triggers;
+  if (!Array.isArray(raw))
+    return [];
+  return raw.filter((t) => typeof t === "string").map((t) => t.trim()).filter(Boolean);
+}
+function formatScale(n) {
+  if (typeof n !== "number" || !Number.isFinite(n) || n < 0)
+    return "";
+  return String(Number(n.toFixed(4)));
 }
 function formatBytes(n) {
   if (typeof n !== "number" || !Number.isFinite(n) || n < 0)
@@ -1217,9 +1231,104 @@ function createGallery(opts) {
     r.appendChild(btn);
     return r;
   }
+  function headingNode(text) {
+    const h = document.createElement("div");
+    h.className = "mg-detail-head";
+    h.textContent = text;
+    return h;
+  }
+  function appendRows(parent, rows) {
+    for (const [k, v] of rows) {
+      const r = document.createElement("div");
+      r.className = "mg-detail-row";
+      const kk = document.createElement("strong");
+      kk.textContent = `${k}: `;
+      r.append(kk, document.createTextNode(v));
+      parent.appendChild(r);
+    }
+  }
+  function rankValue(meta) {
+    const scale = formatScale(typeof meta.scale === "number" ? meta.scale : null);
+    const base = meta.alpha ? `${meta.rank} / α ${meta.alpha}` : String(meta.rank);
+    return scale ? `${base} (×${scale})` : base;
+  }
+  function triggerChip(word) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "mg-trigger";
+    b.textContent = word;
+    b.title = `Copy "${word}"`;
+    b.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const ok = await copyTextToClipboard(word);
+      notify({
+        severity: ok ? "success" : "error",
+        summary: ok ? "Trigger copied" : "Copy failed",
+        detail: ok ? word : undefined
+      });
+    });
+    return b;
+  }
+  function buildTriggerBlock(triggers) {
+    const wrap = document.createElement("div");
+    wrap.className = "mg-triggers-block";
+    const head = headingNode("Trigger words");
+    if (triggers.length > 1) {
+      const all = document.createElement("button");
+      all.type = "button";
+      all.className = "mg-hash-btn mg-copy-all";
+      all.textContent = "Copy all";
+      all.addEventListener("click", async (ev) => {
+        ev.stopPropagation();
+        const joined = triggers.join(", ");
+        const ok = await copyTextToClipboard(joined);
+        notify({
+          severity: ok ? "success" : "error",
+          summary: ok ? "Triggers copied" : "Copy failed",
+          detail: ok ? joined : undefined
+        });
+      });
+      head.appendChild(all);
+    }
+    const chips = document.createElement("div");
+    chips.className = "mg-triggers";
+    for (const word of triggers)
+      chips.appendChild(triggerChip(word));
+    wrap.append(head, chips);
+    return wrap;
+  }
+  function civitaiUrl(meta) {
+    const model = meta?.civitai_model_id ? String(meta.civitai_model_id) : "";
+    const version = meta?.civitai_version_id ? String(meta.civitai_version_id) : "";
+    if (model) {
+      const base = `https://civitai.com/models/${encodeURIComponent(model)}`;
+      return version ? `${base}?modelVersionId=${encodeURIComponent(version)}` : base;
+    }
+    if (version)
+      return `https://civitai.com/model-versions/${encodeURIComponent(version)}`;
+    return null;
+  }
+  function buildCivitaiRow(url) {
+    const r = document.createElement("div");
+    r.className = "mg-detail-row";
+    const kk = document.createElement("strong");
+    kk.textContent = "Civitai: ";
+    const a = document.createElement("a");
+    a.className = "mg-link";
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = "open model page";
+    a.addEventListener("click", (ev) => ev.stopPropagation());
+    r.append(kk, a);
+    return r;
+  }
   function buildDetail(meta, ctx = {}) {
     const d = document.createElement("div");
     d.className = "mg-detail";
+    const triggers = triggerList(meta);
+    if (triggers.length)
+      d.appendChild(buildTriggerBlock(triggers));
     const rows = [];
     if (meta?.dtype)
       rows.push(["Precision", String(meta.dtype)]);
@@ -1240,25 +1349,46 @@ function createGallery(opts) {
       rows.push(["Base", String(meta.base)]);
     if (meta?.title)
       rows.push(["Title", String(meta.title)]);
+    if (meta?.sd_model_name)
+      rows.push(["Trained on", String(meta.sd_model_name)]);
     if (meta?.network_module)
       rows.push(["Network", String(meta.network_module)]);
     if (meta?.rank)
-      rows.push(["Rank", meta.alpha ? `${meta.rank} / α ${meta.alpha}` : String(meta.rank)]);
+      rows.push(["Rank", rankValue(meta)]);
     else if (meta?.alpha)
       rows.push(["Alpha", String(meta.alpha)]);
+    if (meta?.clip_skip)
+      rows.push(["CLIP skip", String(meta.clip_skip)]);
     if (meta?.resolution)
       rows.push(["Trained", String(meta.resolution)]);
-    for (const [k, v] of rows) {
-      const r = document.createElement("div");
-      r.className = "mg-detail-row";
-      const kk = document.createElement("strong");
-      kk.textContent = `${k}: `;
-      r.append(kk, document.createTextNode(v));
-      d.appendChild(r);
-    }
+    appendRows(d, rows);
     if (ctx.name)
       d.appendChild(buildChecksumRow(meta, ctx.name));
+    const training = [];
+    if (meta?.optimizer)
+      training.push(["Optimizer", String(meta.optimizer)]);
+    if (meta?.learning_rate)
+      training.push(["LR", String(meta.learning_rate)]);
+    if (meta?.unet_lr)
+      training.push(["UNet LR", String(meta.unet_lr)]);
+    if (meta?.text_encoder_lr)
+      training.push(["Text encoder LR", String(meta.text_encoder_lr)]);
+    if (meta?.steps)
+      training.push(["Steps", String(meta.steps)]);
+    if (meta?.epochs)
+      training.push(["Epochs", String(meta.epochs)]);
+    if (meta?.train_images)
+      training.push(["Images", String(meta.train_images)]);
+    if (meta?.reg_images)
+      training.push(["Reg images", String(meta.reg_images)]);
+    if (typeof meta?.buckets === "number")
+      training.push(["Buckets", String(meta.buckets)]);
+    if (training.length) {
+      d.appendChild(headingNode("Training"));
+      appendRows(d, training);
+    }
     if (meta && Array.isArray(meta.tags) && meta.tags.length) {
+      d.appendChild(headingNode(triggers.length ? "Dataset tags" : "Common tags"));
       const t = document.createElement("div");
       t.className = "mg-tags";
       for (const tag of meta.tags) {
@@ -1269,6 +1399,9 @@ function createGallery(opts) {
       }
       d.appendChild(t);
     }
+    const civitai = civitaiUrl(meta);
+    if (civitai)
+      d.appendChild(buildCivitaiRow(civitai));
     if (meta?.description) {
       const ds = document.createElement("div");
       ds.className = "mg-detail-desc";
@@ -1653,12 +1786,47 @@ var PICKER_CSS = `
     font-style: italic;
 }
 .mg-detail-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     color: #7a8aa0;
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    margin-bottom: 3px;
+    margin: 5px 0 3px;
 }
+.mg-detail-head:first-child { margin-top: 0; }
+.mg-copy-all { text-transform: none; letter-spacing: 0; }
+.mg-triggers-block { margin-bottom: 5px; }
+.mg-triggers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+/* Trigger chips are tappable (copy-to-clipboard) and deliberately louder than
+   the frequency tags below them — they are what you type in the prompt. */
+.mg-trigger {
+    background: #232c3d;
+    border: 1px solid #3c4a68;
+    border-radius: 10px;
+    /* Roomy enough to hit with a thumb without breaking the compact fold. */
+    padding: 3px 9px;
+    font-size: 11px;
+    font-family: inherit;
+    color: #cfe0ff;
+    cursor: pointer;
+    line-height: 1.4;
+}
+.mg-trigger:hover {
+    border-color: #5b76ad;
+    color: #eaf2ff;
+}
+.mg-trigger:active { background: #2c3752; }
+.mg-link {
+    color: #9ec6ff;
+    text-decoration: none;
+}
+.mg-link:hover { text-decoration: underline; }
 .mg-detail-row strong { color: #aaa; font-weight: 600; }
 .mg-detail-hashrow {
     display: flex;

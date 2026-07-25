@@ -15,7 +15,8 @@ v0.1 surface:
 
   - GET /model_gallery/meta?category=<cat>&name=<name>
       Read the embedded header metadata of a single model file (base-model
-      architecture, LoRA training info, trigger/common tags, title). Pairs
+      architecture, title, and — for LoRAs — trigger words, network topology,
+      dataset and training-run details, common tags). Pairs
       with the frontend's filename-heuristic corpus: the corpus is the
       instant, universal guess; this is the authoritative read when the file
       actually carries metadata. Only .safetensors/.sft headers are parsed
@@ -182,6 +183,162 @@ def _friendly_base(*candidates: str | None) -> str | None:
     return None
 
 
+# Trainers write the literal string "None" (kohya's convention for an unset
+# hyperparameter — e.g. ss_text_encoder_lr on a UNet-only run) as often as they
+# omit the key. Treat those as absent so the UI never shows "Text encoder LR:
+# None"; every curated value must be something a user can act on.
+_ABSENT_STRINGS = {"none", "null", "nan", "false"}
+
+# Cap on how many trigger words are surfaced. Well-behaved LoRAs carry a
+# handful; a mislabelled dump of the whole caption set must not blow up the
+# response or the modal.
+_TRIGGER_LIMIT = 24
+
+
+def _clean_str(value: Any) -> str | None:
+    """Normalise one raw header value to a meaningful string, or None.
+
+    safetensors metadata values are JSON strings by spec, but numbers show up in
+    hand-rolled files, so both are accepted. Returns None for empty strings and
+    for the trainer sentinels in ``_ABSENT_STRINGS`` — the caller can then treat
+    "key present" as "worth showing".
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return str(value)
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or text.lower() in _ABSENT_STRINGS:
+        return None
+    return text
+
+
+def _clean_count(value: Any) -> str | None:
+    """:func:`_clean_str` for a count/step field, additionally dropping zeros.
+
+    ``ss_num_reg_images: "0"`` means "no regularisation images were used" — a
+    row saying so is noise, so a non-positive numeric value reads as absent.
+    Non-numeric text is passed through (some trainers write ranges).
+    """
+    text = _clean_str(value)
+    if text is None:
+        return None
+    try:
+        if float(text) <= 0:
+            return None
+    except ValueError:
+        pass  # not a number — surface it verbatim
+    return text
+
+
+def _split_trigger_field(raw: Any) -> list[str]:
+    """Parse one trigger-word field into a list of words.
+
+    Trainers disagree on the encoding: ``ss_trained_words`` is a JSON array in
+    some versions and a bare comma-separated string in others, and
+    ``modelspec.trigger_phrase`` is a single phrase (frequently itself a
+    comma-separated tag list). Both encodings are handled; a non-JSON value is
+    split on commas, which matches the dominant convention at the cost of
+    splitting the rare phrase that contains one. Returns [] on anything empty
+    or malformed.
+    """
+    text = _clean_str(raw)
+    if text is None:
+        return []
+    if text.startswith("["):
+        try:
+            data = json.loads(text)
+        except (ValueError, TypeError):
+            data = None
+        if isinstance(data, list):
+            return [w for w in (_clean_str(item) for item in data) if w]
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _trigger_words(meta: dict[str, Any], limit: int = _TRIGGER_LIMIT) -> list[str]:
+    """Collect the LoRA's explicit trigger words, most authoritative key first.
+
+    ``ss_trained_words`` (kohya/sd-scripts) and ``modelspec.trigger_phrase``
+    (ModelSpec) are the two places a trainer records the tokens a LoRA was
+    actually captioned with. Unlike the ``ss_tag_frequency`` aggregate — a
+    dataset statistic — these are the author's declared triggers, so they lead
+    in the UI. Deduplicated case-insensitively, first spelling wins, order
+    preserved. Returns [] when the file declares none (the common case for
+    diffusers/ai-toolkit output) — never guessed from the filename.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for key in ("ss_trained_words", "modelspec.trigger_phrase", "ss_trigger_words"):
+        for word in _split_trigger_field(meta.get(key)):
+            low = word.lower()
+            if low in seen:
+                continue
+            seen.add(low)
+            out.append(word)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def _bucket_count(raw: Any) -> int | None:
+    """Number of aspect-ratio buckets from kohya's ``ss_bucket_info`` JSON.
+
+    The field is a JSON string like ``{"buckets": {"0": {"resolution": [512,
+    768], "count": 30}, ...}}``. The full map is too much for a picker row; the
+    bucket count is the one-glance signal for how varied the training aspect
+    ratios were. Returns None on anything malformed or empty.
+    """
+    text = _clean_str(raw)
+    if text is None:
+        return None
+    try:
+        data = json.loads(text)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    buckets = data.get("buckets")
+    if not isinstance(buckets, dict) or not buckets:
+        return None
+    return len(buckets)
+
+
+def _short_optimizer(raw: Any) -> str | None:
+    """Reduce an optimizer spec to its class name.
+
+    Trainers write the fully-qualified constructor call, e.g.
+    ``"bitsandbytes.optim.adamw.AdamW8bit(weight_decay=0.1,betas=(0.9, 0.99))"``.
+    The class name is what identifies the run ("AdamW8bit", "Prodigy"); the
+    module path and kwargs are noise on a phone-sized row.
+    """
+    text = _clean_str(raw)
+    if text is None:
+        return None
+    head = text.split("(", 1)[0].strip()
+    short = head.rsplit(".", 1)[-1].strip()
+    return (short or head)[:64]
+
+
+def _lora_scale(rank: Any, alpha: Any) -> float | None:
+    """The effective LoRA weight scale, ``alpha / rank``.
+
+    This is the multiplier actually applied to the adapter at inference time, so
+    it explains why two rank-32 LoRAs can behave very differently. Derived
+    arithmetic — not invented data — and None unless both values parse and rank
+    is positive.
+    """
+    try:
+        r = float(str(rank))
+        a = float(str(alpha))
+    except (TypeError, ValueError):
+        return None
+    if r <= 0:
+        return None
+    return round(a / r, 4)
+
+
 def _top_tags(raw: Any, limit: int = 12) -> list[str]:
     """Aggregate kohya's ``ss_tag_frequency`` into the most-frequent tags.
 
@@ -318,14 +475,17 @@ def _tensor_stats(header: dict[str, Any]) -> dict[str, Any]:
 def _curate_metadata(meta: dict[str, Any]) -> dict[str, Any]:
     """Distil a raw safetensors __metadata__ map into the UI's curated subset.
 
-    Pulls the high-signal keys the picker shows (base, title, network/training
-    info for LoRAs, common tags). Skips empties so the frontend can treat any
-    present key as meaningful. All safetensors metadata values are strings;
-    they're surfaced verbatim except tags (parsed) and a length-capped
-    description.
+    Pulls the high-signal keys the picker shows: what the file is (base, title,
+    description), what a LoRA responds to (trigger words, common tags), how it
+    was built (network topology + training run), and how to identify it (hash,
+    Civitai ids). Skips empties and trainer "None" sentinels so the frontend can
+    treat any present key as meaningful — a missing key means the file genuinely
+    doesn't carry it. All safetensors metadata values are strings; they're
+    surfaced verbatim except tags/triggers (parsed), the derived LoRA ``scale``,
+    the bucket count, and a length-capped description.
     """
-    arch = meta.get("modelspec.architecture")
-    base_ver = meta.get("ss_base_model_version")
+    arch = _clean_str(meta.get("modelspec.architecture"))
+    base_ver = _clean_str(meta.get("ss_base_model_version"))
     out: dict[str, Any] = {}
 
     base = _friendly_base(arch, base_ver)
@@ -336,33 +496,92 @@ def _curate_metadata(meta: dict[str, Any]) -> dict[str, Any]:
     if base_ver:
         out["base_model_version"] = base_ver
 
-    title = meta.get("modelspec.title")
+    title = _clean_str(meta.get("modelspec.title"))
     if title:
         out["title"] = title
-    description = meta.get("modelspec.description")
-    if isinstance(description, str) and description.strip():
-        out["description"] = description.strip()[:500]
+    description = _clean_str(meta.get("modelspec.description"))
+    if description:
+        out["description"] = description[:500]
 
-    network_module = meta.get("ss_network_module")
+    # --- Trigger words: what you actually type to invoke a LoRA ---
+    triggers = _trigger_words(meta)
+    if triggers:
+        out["triggers"] = triggers
+
+    # --- Network topology ---
+    network_module = _clean_str(meta.get("ss_network_module"))
     if network_module:
         out["network_module"] = network_module
-    rank = meta.get("ss_network_dim")
+    rank = _clean_str(meta.get("ss_network_dim"))
     if rank:
         out["rank"] = rank
-    alpha = meta.get("ss_network_alpha")
+    alpha = _clean_str(meta.get("ss_network_alpha"))
     if alpha:
         out["alpha"] = alpha
-    resolution = meta.get("modelspec.resolution") or meta.get("ss_resolution")
+    scale = _lora_scale(rank, alpha)
+    if scale is not None:
+        out["scale"] = scale
+
+    # --- Base model the adapter targets ---
+    sd_model = _clean_str(meta.get("ss_sd_model_name"))
+    if sd_model:
+        out["sd_model_name"] = sd_model
+    clip_skip = _clean_count(meta.get("ss_clip_skip"))
+    if clip_skip:
+        out["clip_skip"] = clip_skip
+
+    # --- Dataset ---
+    resolution = _clean_str(meta.get("modelspec.resolution")) or _clean_str(
+        meta.get("ss_resolution")
+    )
     if resolution:
         out["resolution"] = resolution
+    train_images = _clean_count(meta.get("ss_num_train_images"))
+    if train_images:
+        out["train_images"] = train_images
+    reg_images = _clean_count(meta.get("ss_num_reg_images"))
+    if reg_images:
+        out["reg_images"] = reg_images
+    buckets = _bucket_count(meta.get("ss_bucket_info"))
+    if buckets:
+        out["buckets"] = buckets
+
+    # --- Training run ---
+    optimizer = _short_optimizer(meta.get("ss_optimizer"))
+    if optimizer:
+        out["optimizer"] = optimizer
+    lr = _clean_str(meta.get("ss_learning_rate"))
+    if lr:
+        out["learning_rate"] = lr
+    unet_lr = _clean_str(meta.get("ss_unet_lr"))
+    if unet_lr:
+        out["unet_lr"] = unet_lr
+    te_lr = _clean_str(meta.get("ss_text_encoder_lr"))
+    if te_lr:
+        out["text_encoder_lr"] = te_lr
+    steps = _clean_count(meta.get("ss_max_train_steps")) or _clean_count(meta.get("ss_steps"))
+    if steps:
+        out["steps"] = steps
+    epochs = _clean_count(meta.get("ss_num_epochs")) or _clean_count(meta.get("ss_epoch"))
+    if epochs:
+        out["epochs"] = epochs
 
     tags = _top_tags(meta.get("ss_tag_frequency"))
     if tags:
         out["tags"] = tags
 
-    sha = meta.get("modelspec.hash_sha256") or meta.get("sshs_model_hash")
+    # --- Identifiers ---
+    sha = _clean_str(meta.get("modelspec.hash_sha256")) or _clean_str(meta.get("sshs_model_hash"))
     if sha:
         out["sha256"] = sha
+    # Injected by download helpers / Civitai integrations. Surfaced as bare ids
+    # (the frontend builds the link) — this pack makes no outbound request.
+    civitai_model = _clean_count(meta.get("civitai_model_id"))
+    if civitai_model:
+        out["civitai_model_id"] = civitai_model
+    civitai_version = _clean_count(meta.get("civitai_version_id"))
+    if civitai_version:
+        out["civitai_version_id"] = civitai_version
 
     return out
 

@@ -263,6 +263,127 @@ def test_top_tags_empty_on_malformed():
     assert pack._top_tags(json.dumps(["not", "a", "dict"])) == []
 
 
+def test_clean_str_drops_blanks_and_trainer_sentinels():
+    assert pack._clean_str("  AdamW  ") == "AdamW"
+    assert pack._clean_str("None") is None
+    assert pack._clean_str("null") is None
+    assert pack._clean_str("") is None
+    assert pack._clean_str(None) is None
+    assert pack._clean_str(True) is None
+    assert pack._clean_str(32) == "32"
+
+
+def test_clean_count_drops_non_positive_but_keeps_text():
+    assert pack._clean_count("120") == "120"
+    assert pack._clean_count("0") is None
+    assert pack._clean_count("-1") is None
+    assert pack._clean_count("None") is None
+    assert pack._clean_count("512-768") == "512-768"
+
+
+def test_split_trigger_field_handles_json_array_and_csv():
+    assert pack._split_trigger_field(json.dumps(["ohwx man", "portrait"])) == [
+        "ohwx man",
+        "portrait",
+    ]
+    assert pack._split_trigger_field("ohwx man, portrait ,") == ["ohwx man", "portrait"]
+    assert pack._split_trigger_field("None") == []
+    assert pack._split_trigger_field(None) == []
+    assert pack._split_trigger_field("[not json") == ["[not json"]
+
+
+def test_trigger_words_merges_keys_and_dedupes_case_insensitively():
+    meta = {
+        "ss_trained_words": json.dumps(["ohwx man", "Portrait"]),
+        "modelspec.trigger_phrase": "portrait, cinematic",
+    }
+    # First spelling wins; the ModelSpec phrase only contributes what's new.
+    assert pack._trigger_words(meta) == ["ohwx man", "Portrait", "cinematic"]
+
+
+def test_trigger_words_empty_when_absent_and_respects_limit():
+    assert pack._trigger_words({}) == []
+    assert pack._trigger_words({"ss_trained_words": "None"}) == []
+    many = ",".join(f"tag{i}" for i in range(50))
+    assert len(pack._trigger_words({"ss_trained_words": many})) == pack._TRIGGER_LIMIT
+
+
+def test_bucket_count_counts_buckets():
+    raw = json.dumps({"buckets": {"0": {"resolution": [512, 512]}, "1": {}}})
+    assert pack._bucket_count(raw) == 2
+    assert pack._bucket_count(json.dumps({"buckets": {}})) is None
+    assert pack._bucket_count("not json") is None
+    assert pack._bucket_count(None) is None
+
+
+def test_short_optimizer_strips_module_path_and_kwargs():
+    spec = "bitsandbytes.optim.adamw.AdamW8bit(weight_decay=0.1)"
+    assert pack._short_optimizer(spec) == "AdamW8bit"
+    assert pack._short_optimizer("Prodigy") == "Prodigy"
+    assert pack._short_optimizer("None") is None
+
+
+def test_lora_scale_is_alpha_over_rank():
+    assert pack._lora_scale("32", "16") == 0.5
+    assert pack._lora_scale("128", "128") == 1.0
+    assert pack._lora_scale("0", "16") is None
+    assert pack._lora_scale("abc", "16") is None
+    assert pack._lora_scale(None, None) is None
+
+
+def test_curate_metadata_pulls_lora_training_details():
+    out = pack._curate_metadata(
+        {
+            "ss_trained_words": json.dumps(["ohwx dog"]),
+            "ss_network_dim": "32",
+            "ss_network_alpha": "16",
+            "ss_clip_skip": "2",
+            "ss_sd_model_name": "sd_xl_base_1.0.safetensors",
+            "ss_optimizer": "bitsandbytes.optim.adamw.AdamW8bit(weight_decay=0.1)",
+            "ss_learning_rate": "0.0001",
+            "ss_unet_lr": "0.0001",
+            "ss_text_encoder_lr": "None",  # UNet-only run — must not surface
+            "ss_max_train_steps": "2400",
+            "ss_num_epochs": "10",
+            "ss_num_train_images": "120",
+            "ss_num_reg_images": "0",  # unused — must not surface
+            "ss_bucket_info": json.dumps({"buckets": {"0": {}, "1": {}, "2": {}}}),
+            "civitai_model_id": "12345",
+            "civitai_version_id": "67890",
+        }
+    )
+    assert out["triggers"] == ["ohwx dog"]
+    assert out["scale"] == 0.5
+    assert out["clip_skip"] == "2"
+    assert out["sd_model_name"] == "sd_xl_base_1.0.safetensors"
+    assert out["optimizer"] == "AdamW8bit"
+    assert out["learning_rate"] == "0.0001"
+    assert out["unet_lr"] == "0.0001"
+    assert "text_encoder_lr" not in out
+    assert out["steps"] == "2400"
+    assert out["epochs"] == "10"
+    assert out["train_images"] == "120"
+    assert "reg_images" not in out
+    assert out["buckets"] == 3
+    assert out["civitai_model_id"] == "12345"
+    assert out["civitai_version_id"] == "67890"
+
+
+def test_curate_metadata_omits_absent_lora_fields():
+    # A checkpoint (or a diffusers-trained LoRA) carries none of the ss_* keys —
+    # the curated map must stay empty of them rather than inventing values.
+    out = pack._curate_metadata({"modelspec.architecture": "flux-1-dev"})
+    for key in ("triggers", "scale", "optimizer", "steps", "epochs", "train_images", "buckets"):
+        assert key not in out
+    assert out["base"] == "Flux.1"
+
+
+def test_curate_metadata_falls_back_to_ss_steps_and_ss_epoch():
+    out = pack._curate_metadata({"ss_steps": "800", "ss_epoch": "4"})
+    assert out["steps"] == "800"
+    assert out["epochs"] == "4"
+
+
 def test_curate_metadata_pulls_high_signal_keys():
     out = pack._curate_metadata(
         {
@@ -335,6 +456,30 @@ def test_meta_returns_curated_metadata_for_safetensors(tmp_path):
     assert resp.json_body["meta"]["rank"] == "64"
     # Size is always injected from the stat that keys the cache.
     assert resp.json_body["meta"]["size"] == f.stat().st_size
+
+
+def test_meta_surfaces_lora_triggers_and_training(tmp_path):
+    pack._META_CACHE.clear()
+    f = tmp_path / "style.safetensors"
+    _write_safetensors(
+        f,
+        {
+            "__metadata__": {
+                "ss_trained_words": "ohwx style, watercolor",
+                "ss_network_dim": "16",
+                "ss_network_alpha": "8",
+                "ss_optimizer": "prodigyopt.prodigy.Prodigy(d_coef=1.0)",
+                "ss_num_train_images": "42",
+            }
+        },
+    )
+    folder_paths.get_full_path = lambda category, name: str(f)
+    resp = _call(pack.model_meta, category="loras", name="style.safetensors")
+    meta = resp.json_body["meta"]
+    assert meta["triggers"] == ["ohwx style", "watercolor"]
+    assert meta["scale"] == 0.5
+    assert meta["optimizer"] == "Prodigy"
+    assert meta["train_images"] == "42"
 
 
 def test_meta_includes_dtype_and_params(tmp_path):

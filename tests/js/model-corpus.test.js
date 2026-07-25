@@ -5,9 +5,11 @@ import {
   corpusKey,
   formatBytes,
   formatParams,
+  formatScale,
   formatTooltip,
   lookup,
   safeRegex,
+  triggerList,
 } from "../../src/model-corpus.ts";
 
 describe("safeRegex", () => {
@@ -122,6 +124,52 @@ describe("formatTooltip", () => {
 
   it("returns '' when there is no info", () => {
     expect(formatTooltip("x", null)).toBe("");
+  });
+
+  it("includes trigger words from the embedded-metadata upgrade", () => {
+    const tip = formatTooltip("mylora.safetensors", {
+      base: "SDXL",
+      triggers: ["ohwx dog", "watercolor"],
+    });
+    expect(tip).toContain("Triggers: ohwx dog, watercolor");
+  });
+
+  it("omits the trigger line when the file declares none", () => {
+    expect(formatTooltip("x", { base: "SDXL", summary: "s" })).not.toContain("Triggers:");
+  });
+});
+
+describe("triggerList", () => {
+  it("returns the trimmed string members", () => {
+    expect(triggerList({ triggers: [" ohwx dog ", "watercolor"] })).toEqual([
+      "ohwx dog",
+      "watercolor",
+    ]);
+  });
+
+  it("drops non-string and blank members", () => {
+    expect(triggerList({ triggers: ["ok", 42, null, "  ", { a: 1 }] })).toEqual(["ok"]);
+  });
+
+  it("returns [] for a missing/non-array field or no info", () => {
+    expect(triggerList({})).toEqual([]);
+    expect(triggerList({ triggers: "ohwx dog" })).toEqual([]);
+    expect(triggerList(null)).toEqual([]);
+  });
+});
+
+describe("formatScale", () => {
+  it("formats the alpha/rank ratio, trimming trailing zeros", () => {
+    expect(formatScale(0.5)).toBe("0.5");
+    expect(formatScale(1)).toBe("1");
+    expect(formatScale(0.0625)).toBe("0.0625");
+  });
+
+  it("returns '' for null/undefined/negative/non-finite", () => {
+    expect(formatScale(null)).toBe("");
+    expect(formatScale(undefined)).toBe("");
+    expect(formatScale(-1)).toBe("");
+    expect(formatScale(Number.NaN)).toBe("");
   });
 });
 

@@ -54,14 +54,39 @@ Each card is annotated with *what the model is*, in two layers:
    filter (search `sdxl`, `anime`, `upscale`, …) and the widget's
    hover/long-press tooltip for the current value.
 2. **Embedded metadata** (authoritative, on demand) — tap a card's **ⓘ** to
-   read the `.safetensors` header (base model, LoRA rank/alpha, trained
-   resolution, and the most-frequent training tags). Served by the
+   read the `.safetensors` header (base model, precision/params, rank/alpha,
+   trained resolution, and the most-frequent training tags). Served by the
    `/model_gallery/meta` backend endpoint, which parses only the file header
    (no tensors) using bundled libs and resolves paths solely through
    `folder_paths` — it never reads an arbitrary path.
 
 The corpus is heuristic — a hint, not a guarantee; embedded metadata wins when
 present. Both are additive: a file with no match just shows its bare name.
+
+### LoRA details
+
+LoRAs carry more in their header than any other model type, and the detail
+fold surfaces it:
+
+- **Trigger words** — the tokens the LoRA was captioned with
+  (`ss_trained_words` / `modelspec.trigger_phrase`), as chips you **tap to
+  copy** straight into a prompt, plus *Copy all*. They also appear in the
+  widget's hover/long-press tooltip for the selected LoRA, so you can read them
+  without opening the picker. Frequency-ranked dataset tags
+  (`ss_tag_frequency`) are shown separately below them — a statistic, not a
+  declared trigger.
+- **Topology** — rank, alpha and the effective weight scale (α / r), the
+  adapter implementation (`networks.lora`, `lycoris.kohya`, …), CLIP skip, and
+  the base checkpoint it was trained against.
+- **Training** — optimizer, learning rates (UNet / text encoder), steps,
+  epochs, dataset image counts and aspect-ratio bucket count.
+- **Civitai** — a link to the model page when a download helper injected
+  `civitai_model_id` / `civitai_version_id`. The link is yours to click; the
+  pack itself makes no outbound request.
+
+All of this is optional in the file format: LoRAs trained with kohya/sd-scripts
+or Musubi Tuner carry most of it, while raw diffusers or minimalist scripts
+often carry none. Missing fields are simply omitted — never guessed.
 
 ## Compatibility
 
