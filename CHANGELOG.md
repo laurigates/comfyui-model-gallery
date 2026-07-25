@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.16](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.15...comfyui-model-gallery-v0.1.16) (2026-07-25)
+
+
+### Features
+
+* **meta:** surface LoRA trigger words and training metadata ([#51](https://github.com/laurigates/comfyui-model-gallery/issues/51)) ([996799b](https://github.com/laurigates/comfyui-model-gallery/commit/996799b94ee13f80a4959c4dddf0b001802cd233))
+
 ## [0.1.15](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.14...comfyui-model-gallery-v0.1.15) (2026-07-17)
 
 
