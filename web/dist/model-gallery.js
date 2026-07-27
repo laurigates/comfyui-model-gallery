@@ -1,6 +1,6 @@
 /* web/dist bundle built by bun from src/ in this repository (see package.json). Inlines @laurigates/comfy-modal-kit (MIT) - a first-party library by the same publisher, published to npm with provenance attestation: https://www.npmjs.com/package/@laurigates/comfy-modal-kit */
 
-// ../comfy-modal-kit/dist/index.js
+// node_modules/@laurigates/comfy-modal-kit/dist/index.js
 var KEY = Symbol.for("laurigates.comfyModalKit");
 function getKit() {
   const g = globalThis;
@@ -298,15 +298,6 @@ function pointerGuard(e) {
   }
   e.stopImmediatePropagation();
   dismissActiveModal();
-}
-function registerModelPicker(picker) {
-  const list = getKit().modelPickers;
-  const i = list.findIndex((p) => p.id === picker.id);
-  if (i >= 0) {
-    list.splice(i, 1, picker);
-  } else {
-    list.push(picker);
-  }
 }
 function fuzzyScore(query, target) {
   if (!query)
@@ -692,6 +683,15 @@ function openModalShell(opts = {}) {
     });
   }
   return controller;
+}
+function registerModelPicker(picker) {
+  const list = getKit().modelPickers;
+  const i = list.findIndex((p) => p.id === picker.id);
+  if (i >= 0) {
+    list.splice(i, 1, picker);
+  } else {
+    list.push(picker);
+  }
 }
 
 // src/model-gallery.ts
