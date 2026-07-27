@@ -63,6 +63,33 @@ Each card is annotated with *what the model is*, in two layers:
 The corpus is heuristic — a hint, not a guarantee; embedded metadata wins when
 present. Both are additive: a file with no match just shows its bare name.
 
+### Where the grid shows up
+
+Three surfaces, in increasing indirection — all optional, all falling back
+cleanly to the native control when a sibling pack isn't installed:
+
+1. **On the canvas.** Tapping a matched `*_name` combo opens the grid as a modal.
+2. **Inline in a node editor.** The pack registers a `FieldProvider` with
+   `@laurigates/comfy-modal-kit`, so
+   [comfyui-prompt-editor](https://github.com/laurigates/comfyui-prompt-editor)'s
+   all-fields modal mounts the grid in place of a bare `<select>` for those same
+   combos.
+3. **Anywhere a host knows a folder category but has no combo widget.** The pack
+   also registers a **`ModelPicker`**, keyed on the `folder_paths` category
+   (`loras`, `checkpoints`, …) rather than on a widget name.
+
+The third exists for rgthree's **Power Lora Loader**: its LoRA rows are
+self-drawing custom widgets whose value is an object with no values array, so
+they match neither of this pack's widget-name predicates. A host editing such a
+row can now ask for "a picker for `loras`" and get the full card grid, plus an
+optional compact metadata strip (base architecture, rank/alpha, copy-on-tap
+trigger words) for the file already chosen. All metadata knowledge stays inside
+this pack — the host mounts an opaque element.
+
+The set of pickable categories is derived from the widget-name map itself, so
+adding a widget mapping automatically makes its category pickable and the two
+cannot drift.
+
 ### LoRA details
 
 LoRAs carry more in their header than any other model type, and the detail
