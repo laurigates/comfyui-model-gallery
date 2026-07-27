@@ -6,6 +6,7 @@ import {
   isComboWidget,
   remapMatches,
   subfolderChips,
+  supportsCategory,
   topLevelSubfolder,
   WIDGET_CATEGORY,
 } from "../../src/model-gallery.ts";
@@ -51,6 +52,45 @@ describe("categoryForWidget", () => {
       expect(typeof cat).toBe("string");
       expect(cat.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// supportsCategory is the ModelPicker registry's predicate (kit ADR-0003). It
+// keys on a folder_paths CATEGORY, not a widget, because the caller (an rgthree
+// Power Lora Loader row in comfyui-prompt-editor) has a category but no combo
+// widget to match on.
+describe("supportsCategory", () => {
+  it("accepts every category this pack maps a widget to", () => {
+    for (const cat of WIDGET_CATEGORY.values()) {
+      expect(supportsCategory(cat)).toBe(true);
+    }
+  });
+
+  it("accepts the loras category — the Power Lora Loader case", () => {
+    expect(supportsCategory("loras")).toBe(true);
+  });
+
+  it("rejects a category this pack cannot enumerate", () => {
+    expect(supportsCategory("samplers")).toBe(false);
+    expect(supportsCategory("embeddings")).toBe(false);
+    expect(supportsCategory("")).toBe(false);
+  });
+
+  it("rejects a WIDGET name — the argument is a category, not a widget name", () => {
+    // The distinction that makes this a separate registry: `lora_name` is a
+    // widget name, `loras` is the folder_paths category it maps TO. No widget
+    // name is also a category, so passing one through is a caller bug we should
+    // not silently accept.
+    expect(supportsCategory("lora_name")).toBe(false);
+    expect(supportsCategory("ckpt_name")).toBe(false);
+    expect(supportsCategory("upscale_model")).toBe(false);
+  });
+
+  it("rejects non-string input without throwing", () => {
+    expect(supportsCategory(null)).toBe(false);
+    expect(supportsCategory(undefined)).toBe(false);
+    expect(supportsCategory(42)).toBe(false);
+    expect(supportsCategory({})).toBe(false);
   });
 });
 

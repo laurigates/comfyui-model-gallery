@@ -24,6 +24,7 @@ inlines the kit into the shipped bundle (formerly the vendored
 |----|-------|--------|
 | [ADR-0001](docs/blueprint/adrs/0001-adopt-typescript-bun-build.md) | Adopt TypeScript + bun build for the frontend extension (supersedes the original no-bundler / multi-file-JS approach) | build-tooling |
 | [ADR-0002](docs/blueprint/adrs/0002-adopt-field-provider-and-click-coordinator.md) | Register a model-combo field provider & adopt the kit click coordinator (`patchWidgetPointer`); implements kit ADR-0001 as a provider | api-design |
+| [ADR-0003](docs/blueprint/adrs/0003-register-model-picker-by-category.md) | Also register the gallery as a **category-keyed** `ModelPicker` (+ `createSummary` metadata strip), so hosts editing an rgthree Power Lora Loader row — which has no combo widget to match on — can open the card grid; implements kit ADR-0003 as a provider | api-design |
 
 ## File layout
 

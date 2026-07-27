@@ -1,14 +1,18 @@
 /* web/dist bundle built by bun from src/ in this repository (see package.json). Inlines @laurigates/comfy-modal-kit (MIT) - a first-party library by the same publisher, published to npm with provenance attestation: https://www.npmjs.com/package/@laurigates/comfy-modal-kit */
 
-// node_modules/@laurigates/comfy-modal-kit/dist/index.js
+// ../comfy-modal-kit/dist/index.js
 var KEY = Symbol.for("laurigates.comfyModalKit");
 function getKit() {
   const g = globalThis;
   let kit = g[KEY];
   if (!kit) {
-    kit = { fieldProviders: [], activeModal: null, pointerClaim: null };
+    kit = { fieldProviders: [], modelPickers: [], activeModal: null, pointerClaim: null };
     g[KEY] = kit;
   }
+  if (!kit.fieldProviders)
+    kit.fieldProviders = [];
+  if (!kit.modelPickers)
+    kit.modelPickers = [];
   return kit;
 }
 function registerFieldProvider(provider) {
@@ -20,170 +24,15 @@ function registerFieldProvider(provider) {
     list.push(provider);
   }
 }
-var guardInstalled = false;
-function setActiveModal(handle) {
-  installPointerGuard();
-  dismissActiveModal();
-  getKit().activeModal = handle;
-}
-function dismissActiveModal() {
-  const kit = getKit();
-  const active = kit.activeModal;
-  if (!active)
+function ensureStyleOnce(id, css) {
+  if (typeof document === "undefined")
     return;
-  kit.activeModal = null;
-  try {
-    active.close();
-  } catch (e) {
-    console.warn("[comfy-modal-kit] active modal close() threw", e);
-  }
-}
-function getActiveModal() {
-  return getKit().activeModal;
-}
-function patchWidgetPointer(widget, opener) {
-  const original = widget.onPointerDown;
-  function patched(pointer, node, canvas) {
-    try {
-      if (typeof original === "function") {
-        const consumed = original.call(this, pointer, node, canvas);
-        if (consumed)
-          return consumed;
-      }
-      return opener(pointer, node, canvas);
-    } catch (e) {
-      console.warn("[comfy-modal-kit] patched onPointerDown threw", e);
-      return false;
-    }
-  }
-  widget.onPointerDown = patched;
-  return {
-    restore() {
-      widget.onPointerDown = original;
-    }
-  };
-}
-function installPointerGuard() {
-  if (guardInstalled)
+  if (document.getElementById(id))
     return;
-  if (typeof window === "undefined")
-    return;
-  guardInstalled = true;
-  window.addEventListener("pointerdown", pointerGuard, true);
-}
-function pointerGuard(e) {
-  const active = getKit().activeModal;
-  if (!active)
-    return;
-  const target = e.target;
-  if (active.element && target && active.element.contains(target)) {
-    return;
-  }
-  e.stopImmediatePropagation();
-  dismissActiveModal();
-}
-function fuzzyScore(query, target) {
-  if (!query)
-    return { score: 0, matches: [] };
-  if (!target)
-    return null;
-  const q = query.toLowerCase();
-  const t = target.toLowerCase();
-  const matches = [];
-  let qi = 0;
-  let score = 0;
-  let consecutive = 0;
-  let prevMatchIdx = -1;
-  for (let ti = 0;ti < t.length && qi < q.length; ti++) {
-    if (t[ti] !== q[qi]) {
-      consecutive = 0;
-      continue;
-    }
-    let charScore = 1;
-    if (ti === 0) {
-      charScore += 5;
-    } else {
-      const prev = t[ti - 1];
-      const orig = target[ti];
-      if (prev === "_" || prev === "-" || prev === " " || prev === "." || prev === "/") {
-        charScore += 4;
-      } else if (prev !== undefined && prev >= "a" && prev <= "z" && orig !== undefined && orig >= "A" && orig <= "Z") {
-        charScore += 3;
-      }
-    }
-    if (ti === prevMatchIdx + 1) {
-      consecutive++;
-      charScore += consecutive * 2;
-    } else {
-      consecutive = 0;
-    }
-    score += charScore;
-    matches.push(ti);
-    prevMatchIdx = ti;
-    qi++;
-  }
-  if (qi < q.length)
-    return null;
-  score -= target.length * 0.01;
-  return { score, matches };
-}
-function fuzzyRank(query, fields, primaryWeight = 10) {
-  if (!query)
-    return { score: 0, primaryMatches: [] };
-  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length)
-    return { score: 0, primaryMatches: [] };
-  const primary = fields[0] || "";
-  const rest = fields.slice(1).filter((f) => Boolean(f));
-  let totalScore = 0;
-  const primaryMatchSet = new Set;
-  for (const token of tokens) {
-    const primaryResult = fuzzyScore(token, primary);
-    let best = primaryResult ? {
-      score: primaryResult.score * primaryWeight,
-      matches: primaryResult.matches,
-      onPrimary: true
-    } : null;
-    for (const field of rest) {
-      const r = fuzzyScore(token, field);
-      if (r && (!best || r.score > best.score)) {
-        best = { score: r.score, matches: r.matches, onPrimary: false };
-      }
-    }
-    if (!best)
-      return null;
-    totalScore += best.score;
-    if (best.onPrimary) {
-      for (const i of best.matches)
-        primaryMatchSet.add(i);
-    }
-  }
-  return {
-    score: totalScore,
-    primaryMatches: [...primaryMatchSet].sort((a, b) => a - b)
-  };
-}
-function highlightMatches(target, matchIndices) {
-  const frag = document.createDocumentFragment();
-  if (!target)
-    return frag;
-  const set = new Set(matchIndices || []);
-  if (!set.size) {
-    frag.appendChild(document.createTextNode(target));
-    return frag;
-  }
-  for (let i = 0;i < target.length; i++) {
-    const ch = target[i];
-    if (set.has(i)) {
-      const m = document.createElement("span");
-      m.className = "cmp-match";
-      m.textContent = ch;
-      frag.appendChild(m);
-    } else {
-      frag.appendChild(document.createTextNode(ch));
-    }
-  }
-  return frag;
+  const s = document.createElement("style");
+  s.id = id;
+  s.textContent = css;
+  document.head.appendChild(s);
 }
 var STYLE_ID = "cmn-notify-style";
 var CONTAINER_ID = "cmn-notify-container";
@@ -310,16 +159,6 @@ var CSS2 = `
 .cmn-copy:hover  { background: #34343f; color: #fff; }
 .cmn-copy.cmn-copied { background: #2f4a30; border-color: #4caf50; color: #cfe8d0; }
 `;
-function ensureStyle() {
-  if (typeof document === "undefined")
-    return;
-  if (document.getElementById(STYLE_ID))
-    return;
-  const s = document.createElement("style");
-  s.id = STYLE_ID;
-  s.textContent = CSS2;
-  document.head.appendChild(s);
-}
 function ensureContainer() {
   let c = document.getElementById(CONTAINER_ID);
   if (!c) {
@@ -336,7 +175,7 @@ function notify(opts) {
     console.info(`[notify] ${severity}: ${summary}${detail ? ` — ${detail}` : ""}`);
     return null;
   }
-  ensureStyle();
+  ensureStyleOnce(STYLE_ID, CSS2);
   const container = ensureContainer();
   const life = opts.life ?? defaultLife(severity);
   const copyable = opts.copyable ?? defaultCopyable(severity);
@@ -397,6 +236,180 @@ function notify(opts) {
     timer = setTimeout(close, life);
   }
   return { close, el: toast };
+}
+var guardInstalled = false;
+function setActiveModal(handle) {
+  installPointerGuard();
+  dismissActiveModal();
+  getKit().activeModal = handle;
+}
+function dismissActiveModal() {
+  const kit = getKit();
+  const active = kit.activeModal;
+  if (!active)
+    return;
+  kit.activeModal = null;
+  try {
+    active.close();
+  } catch (e) {
+    console.warn("[comfy-modal-kit] active modal close() threw", e);
+  }
+}
+function getActiveModal() {
+  return getKit().activeModal;
+}
+function patchWidgetPointer(widget, opener) {
+  const original = widget.onPointerDown;
+  function patched(pointer, node, canvas) {
+    try {
+      if (typeof original === "function") {
+        const consumed = original.call(this, pointer, node, canvas);
+        if (consumed)
+          return consumed;
+      }
+      return opener(pointer, node, canvas);
+    } catch (e) {
+      console.warn("[comfy-modal-kit] patched onPointerDown threw", e);
+      return false;
+    }
+  }
+  widget.onPointerDown = patched;
+  return {
+    restore() {
+      widget.onPointerDown = original;
+    }
+  };
+}
+function installPointerGuard() {
+  if (guardInstalled)
+    return;
+  if (typeof window === "undefined")
+    return;
+  guardInstalled = true;
+  window.addEventListener("pointerdown", pointerGuard, true);
+}
+function pointerGuard(e) {
+  const active = getKit().activeModal;
+  if (!active)
+    return;
+  const target = e.target;
+  if (active.element && target && active.element.contains(target)) {
+    return;
+  }
+  e.stopImmediatePropagation();
+  dismissActiveModal();
+}
+function registerModelPicker(picker) {
+  const list = getKit().modelPickers;
+  const i = list.findIndex((p) => p.id === picker.id);
+  if (i >= 0) {
+    list.splice(i, 1, picker);
+  } else {
+    list.push(picker);
+  }
+}
+function fuzzyScore(query, target) {
+  if (!query)
+    return { score: 0, matches: [] };
+  if (!target)
+    return null;
+  const q = query.toLowerCase();
+  const t = target.toLowerCase();
+  const matches = [];
+  let qi = 0;
+  let score = 0;
+  let consecutive = 0;
+  let prevMatchIdx = -1;
+  for (let ti = 0;ti < t.length && qi < q.length; ti++) {
+    if (t[ti] !== q[qi]) {
+      consecutive = 0;
+      continue;
+    }
+    let charScore = 1;
+    if (ti === 0) {
+      charScore += 5;
+    } else {
+      const prev = t[ti - 1];
+      const orig = target[ti];
+      if (prev === "_" || prev === "-" || prev === " " || prev === "." || prev === "/") {
+        charScore += 4;
+      } else if (prev !== undefined && prev >= "a" && prev <= "z" && orig !== undefined && orig >= "A" && orig <= "Z") {
+        charScore += 3;
+      }
+    }
+    if (ti === prevMatchIdx + 1) {
+      consecutive++;
+      charScore += consecutive * 2;
+    } else {
+      consecutive = 0;
+    }
+    score += charScore;
+    matches.push(ti);
+    prevMatchIdx = ti;
+    qi++;
+  }
+  if (qi < q.length)
+    return null;
+  score -= target.length * 0.01;
+  return { score, matches };
+}
+function fuzzyRank(query, fields, primaryWeight = 10) {
+  if (!query)
+    return { score: 0, primaryMatches: [] };
+  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length)
+    return { score: 0, primaryMatches: [] };
+  const primary = fields[0] || "";
+  const rest = fields.slice(1).filter((f) => Boolean(f));
+  let totalScore = 0;
+  const primaryMatchSet = new Set;
+  for (const token of tokens) {
+    const primaryResult = fuzzyScore(token, primary);
+    let best = primaryResult ? {
+      score: primaryResult.score * primaryWeight,
+      matches: primaryResult.matches,
+      onPrimary: true
+    } : null;
+    for (const field of rest) {
+      const r = fuzzyScore(token, field);
+      if (r && (!best || r.score > best.score)) {
+        best = { score: r.score, matches: r.matches, onPrimary: false };
+      }
+    }
+    if (!best)
+      return null;
+    totalScore += best.score;
+    if (best.onPrimary) {
+      for (const i of best.matches)
+        primaryMatchSet.add(i);
+    }
+  }
+  return {
+    score: totalScore,
+    primaryMatches: [...primaryMatchSet].sort((a, b) => a - b)
+  };
+}
+function highlightMatches(target, matchIndices) {
+  const frag = document.createDocumentFragment();
+  if (!target)
+    return frag;
+  const set = new Set(matchIndices || []);
+  if (!set.size) {
+    frag.appendChild(document.createTextNode(target));
+    return frag;
+  }
+  for (let i = 0;i < target.length; i++) {
+    const ch = target[i];
+    if (set.has(i)) {
+      const m = document.createElement("span");
+      m.className = "cmp-match";
+      m.textContent = ch;
+      frag.appendChild(m);
+    } else {
+      frag.appendChild(document.createTextNode(ch));
+    }
+  }
+  return frag;
 }
 var STYLE_ID2 = "cmp-shell-style";
 var CSS22 = `
@@ -548,16 +561,8 @@ var CSS22 = `
     color: #b8b8c0;
 }
 `;
-function ensureStyle2() {
-  if (document.getElementById(STYLE_ID2))
-    return;
-  const s = document.createElement("style");
-  s.id = STYLE_ID2;
-  s.textContent = CSS22;
-  document.head.appendChild(s);
-}
 function openModalShell(opts = {}) {
-  ensureStyle2();
+  ensureStyleOnce(STYLE_ID2, CSS22);
   const backdrop = document.createElement("div");
   backdrop.className = "cmp-backdrop";
   const dialog = document.createElement("div");
@@ -888,6 +893,10 @@ function categoryForWidget(w) {
 function isComboWidget(w) {
   return !!w && Array.isArray(w.options?.values);
 }
+var SUPPORTED_CATEGORIES = new Set(WIDGET_CATEGORY.values());
+function supportsCategory(category) {
+  return typeof category === "string" && SUPPORTED_CATEGORIES.has(category);
+}
 async function fetchListing(category) {
   const url = `${LIST_URL}?category=${encodeURIComponent(category)}`;
   const r = await fetch(url, { cache: "no-cache" });
@@ -935,7 +944,7 @@ function subfolderChips(items) {
   return hasRoot ? ["__all__", "__root__", ...chips] : ["__all__", ...chips];
 }
 function createGallery(opts) {
-  ensureStyle3();
+  ensureStyle();
   const { category, initialValue } = opts;
   const state = {
     items: [],
@@ -1914,8 +1923,26 @@ var PICKER_CSS = `
 .mg-status {
     font-style: italic;
 }
+/* Compact metadata strip for an already-chosen file (the ModelPicker
+   createSummary path — kit ADR-0003). Sits under a host's file button, so it
+   stays one or two lines and never scrolls. */
+.mg-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.mg-summary:empty { display: none; }
+.mg-sum-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    font-size: 11px;
+    color: #9aa0ad;
+}
+.mg-sum-fact strong { color: #777d88; font-weight: 600; }
+.mg-sum-triggers { margin-top: 0; }
 `;
-function ensureStyle3() {
+function ensureStyle() {
   if (document.getElementById(STYLE_ID3))
     return;
   const s = document.createElement("style");
@@ -1979,8 +2006,110 @@ try {
 } catch (e) {
   console.warn(`[${EXT_NAME2}] field provider registration failed`, e);
 }
+function summaryFact(key, value) {
+  const el = document.createElement("span");
+  el.className = "mg-sum-fact";
+  const k = document.createElement("strong");
+  k.textContent = key;
+  el.append(k, document.createTextNode(value));
+  return el;
+}
+function summaryTriggerChip(word) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "mg-trigger";
+  b.textContent = word;
+  b.title = `Copy "${word}"`;
+  b.addEventListener("click", async () => {
+    const ok = await copyTextToClipboard(word);
+    notify({
+      severity: ok ? "success" : "error",
+      summary: ok ? "Trigger copied" : "Copy failed",
+      detail: ok ? word : undefined
+    });
+  });
+  return b;
+}
+function buildSummaryStrip(category, value) {
+  ensureStyle();
+  const root = document.createElement("div");
+  root.className = "mg-summary";
+  if (!value)
+    return root;
+  const paint = (meta) => {
+    root.replaceChildren();
+    const info = lookup(CORPUS, value, category);
+    const base = (meta?.base ? String(meta.base) : "") || (info?.base ?? "");
+    const family = info?.family && info.family !== base ? info.family : "";
+    const facts = document.createElement("div");
+    facts.className = "mg-sum-facts";
+    if (base)
+      facts.appendChild(summaryFact("Base ", base));
+    if (family)
+      facts.appendChild(summaryFact("Family ", family));
+    if (meta?.rank) {
+      const scale = formatScale(typeof meta.scale === "number" ? meta.scale : null);
+      const rank = meta.alpha ? `${meta.rank} / α ${meta.alpha}` : String(meta.rank);
+      facts.appendChild(summaryFact("Rank ", scale ? `${rank} (×${scale})` : rank));
+    } else if (meta?.alpha) {
+      facts.appendChild(summaryFact("Alpha ", String(meta.alpha)));
+    }
+    if (meta?.dtype)
+      facts.appendChild(summaryFact("Precision ", String(meta.dtype)));
+    if (facts.childElementCount)
+      root.appendChild(facts);
+    const triggers = triggerList(meta);
+    if (triggers.length) {
+      const wrap = document.createElement("div");
+      wrap.className = "mg-triggers mg-sum-triggers";
+      for (const word of triggers)
+        wrap.appendChild(summaryTriggerChip(word));
+      root.appendChild(wrap);
+    }
+  };
+  let upgraded = false;
+  loadCorpus().then(() => {
+    if (!upgraded)
+      paint(null);
+  });
+  fetchMeta(category, value).then((meta) => {
+    upgraded = true;
+    paint(meta);
+  });
+  return root;
+}
+try {
+  registerModelPicker({
+    id: "model-gallery:category",
+    priority: 10,
+    supports: supportsCategory,
+    create: ({ category, initialValue }) => {
+      let onChange = null;
+      const view = createGallery({
+        category,
+        initialValue: initialValue ?? "",
+        onSelect: (value) => onChange?.(value)
+      });
+      view.load();
+      return {
+        el: view.el,
+        getValue: () => view.getValue(),
+        hasChanged: () => view.hasChanged(),
+        focus: () => view.focus(),
+        destroy: () => view.destroy(),
+        onValueChange: (cb) => {
+          onChange = cb;
+        }
+      };
+    },
+    createSummary: ({ category, value }) => buildSummaryStrip(category, value)
+  });
+} catch (e) {
+  console.warn(`[${EXT_NAME2}] model picker registration failed`, e);
+}
 export {
   topLevelSubfolder,
+  supportsCategory,
   subfolderChips,
   remapMatches,
   isComboWidget,
