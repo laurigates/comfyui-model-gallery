@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.17](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.16...comfyui-model-gallery-v0.1.17) (2026-07-27)
+
+
+### Features
+
+* **picker:** register the gallery as a category-keyed model picker ([#54](https://github.com/laurigates/comfyui-model-gallery/issues/54)) ([f07a632](https://github.com/laurigates/comfyui-model-gallery/commit/f07a63289d2a7cef8ed1e7e96c9bfaf85ca81178))
+
 ## [0.1.16](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.15...comfyui-model-gallery-v0.1.16) (2026-07-25)
 
 
