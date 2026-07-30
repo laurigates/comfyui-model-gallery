@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.18](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.17...comfyui-model-gallery-v0.1.18) (2026-07-30)
+
+
+### Features
+
+* **assets:** restyle the banner to the vector family ([#59](https://github.com/laurigates/comfyui-model-gallery/issues/59)) ([4e8ac54](https://github.com/laurigates/comfyui-model-gallery/commit/4e8ac5426eea3d6503d48b26f0355cfe4696ccc9))
+
 ## [0.1.17](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.16...comfyui-model-gallery-v0.1.17) (2026-07-27)
 
 
