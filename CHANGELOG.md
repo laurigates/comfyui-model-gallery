@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.19](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.18...comfyui-model-gallery-v0.1.19) (2026-07-30)
+
+
+### Bug Fixes
+
+* **assets:** restore the blue sub-family accent on the banner ([#61](https://github.com/laurigates/comfyui-model-gallery/issues/61)) ([f00e19a](https://github.com/laurigates/comfyui-model-gallery/commit/f00e19a43c47d56727f983412d9769db7a274b39))
+
 ## [0.1.18](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.17...comfyui-model-gallery-v0.1.18) (2026-07-30)
 
 
