@@ -6,13 +6,22 @@ function getKit() {
   const g = globalThis;
   let kit = g[KEY];
   if (!kit) {
-    kit = { fieldProviders: [], modelPickers: [], activeModal: null, pointerClaim: null };
+    kit = {
+      fieldProviders: [],
+      modelPickers: [],
+      activeModal: null,
+      pointerClaim: null,
+      modalChrome: [],
+      pointerGuardInstalled: false
+    };
     g[KEY] = kit;
   }
   if (!kit.fieldProviders)
     kit.fieldProviders = [];
   if (!kit.modelPickers)
     kit.modelPickers = [];
+  if (!kit.modalChrome)
+    kit.modalChrome = [];
   return kit;
 }
 function registerFieldProvider(provider) {
@@ -23,6 +32,112 @@ function registerFieldProvider(provider) {
   } else {
     list.push(provider);
   }
+}
+var SORT_OPTIONS = [
+  { value: "mtime:desc", label: "Newest" },
+  { value: "mtime:asc", label: "Oldest" },
+  { value: "name:asc", label: "Name A→Z" },
+  { value: "name:desc", label: "Name Z→A" },
+  { value: "size:desc", label: "Largest file" },
+  { value: "size:asc", label: "Smallest file" },
+  { value: "pixels:desc", label: "Largest resolution" },
+  { value: "pixels:asc", label: "Smallest resolution" },
+  { value: "rating:desc", label: "Highest rating" },
+  { value: "rating:asc", label: "Lowest rating" }
+];
+var VALID_SORTS = new Set(SORT_OPTIONS.map((o) => o.value));
+var CHROME_ATTR = "data-cmp-chrome";
+function setActiveModal(handle) {
+  installPointerGuard();
+  dismissActiveModal();
+  getKit().activeModal = handle;
+}
+function dismissActiveModal() {
+  const kit = getKit();
+  const active = kit.activeModal;
+  if (!active)
+    return;
+  kit.activeModal = null;
+  try {
+    active.close();
+  } catch (e) {
+    console.warn("[comfy-modal-kit] active modal close() threw", e);
+  }
+}
+function isModalActive() {
+  return getKit().activeModal !== null;
+}
+function getActiveModal() {
+  return getKit().activeModal;
+}
+function registerModalChrome(el) {
+  const chrome = getKit().modalChrome;
+  if (!chrome.includes(el))
+    chrome.push(el);
+  el.setAttribute?.(CHROME_ATTR, "");
+}
+function unregisterModalChrome(el) {
+  const chrome = getKit().modalChrome;
+  for (let i = chrome.length - 1;i >= 0; i--) {
+    if (chrome[i] === el)
+      chrome.splice(i, 1);
+  }
+  el.removeAttribute?.(CHROME_ATTR);
+}
+function isModalChrome(node) {
+  if (!node)
+    return false;
+  for (const el2 of getKit().modalChrome) {
+    if (el2.contains?.(node))
+      return true;
+  }
+  const el = node.nodeType === 1 ? node : node.parentElement;
+  return !!el?.closest?.(`[${CHROME_ATTR}]`);
+}
+function patchWidgetPointer(widget, opener) {
+  const original = widget.onPointerDown;
+  function patched(pointer, node, canvas) {
+    try {
+      if (typeof original === "function") {
+        const consumed = original.call(this, pointer, node, canvas);
+        if (consumed)
+          return consumed;
+      }
+      return opener(pointer, node, canvas);
+    } catch (e) {
+      console.warn("[comfy-modal-kit] patched onPointerDown threw", e);
+      return false;
+    }
+  }
+  widget.onPointerDown = patched;
+  return {
+    restore() {
+      widget.onPointerDown = original;
+    }
+  };
+}
+function installPointerGuard() {
+  const kit = getKit();
+  if (kit.pointerGuardInstalled)
+    return;
+  if (typeof window === "undefined")
+    return;
+  kit.pointerGuardInstalled = true;
+  window.addEventListener("pointerdown", pointerGuard, true);
+}
+function pointerGuard(e) {
+  const active = getKit().activeModal;
+  if (!active)
+    return;
+  const target = e.target;
+  if (active.element && target && active.element.contains(target)) {
+    return;
+  }
+  if (isModalChrome(target)) {
+    return;
+  }
+  e.stopImmediatePropagation();
+  dismissActiveModal();
 }
 function ensureStyleOnce(id, css) {
   if (typeof document === "undefined")
@@ -91,6 +206,14 @@ var CSS2 = `
     pointer-events: none;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+/*
+ * While a modal is up, clear the shell header's close button: .cmp-close is a
+ * 36px button inside a .cmp-header padded 12px/14px at the dialog's top-right,
+ * which lands under the toast's own × — worst case a full-viewport dialog like
+ * comfyui-image-browser's .ib-dialog (100vw/100vh), where the two × controls
+ * overlap exactly. Applied per raise, so a toast on the bare canvas keeps 12px.
+ */
+.cmn-container.cmn-modal-inset { top: 64px; }
 .cmn-toast {
     pointer-events: auto;
     background: #1a1a1f;
@@ -135,8 +258,15 @@ var CSS2 = `
     font-size: 18px;
     line-height: 1;
     padding: 0;
-    width: 24px;
-    height: 24px;
+    /* Touch-first: a 32px target, with the growth absorbed by a negative margin
+       so the toast's visual density is unchanged from the old 24px glyph box. */
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: -4px -4px 0 0;
     flex-shrink: 0;
 }
 .cmn-close:hover { color: #fff; }
@@ -167,6 +297,7 @@ function ensureContainer() {
     c.className = "cmn-container";
     document.body.appendChild(c);
   }
+  registerModalChrome(c);
   return c;
 }
 function notify(opts) {
@@ -177,6 +308,7 @@ function notify(opts) {
   }
   ensureStyleOnce(STYLE_ID, CSS2);
   const container = ensureContainer();
+  container.classList.toggle("cmn-modal-inset", isModalActive());
   const life = opts.life ?? defaultLife(severity);
   const copyable = opts.copyable ?? defaultCopyable(severity);
   const toast = document.createElement("div");
@@ -187,8 +319,10 @@ function notify(opts) {
     if (timer)
       clearTimeout(timer);
     toast.remove();
-    if (container.childElementCount === 0)
+    if (container.childElementCount === 0) {
+      unregisterModalChrome(container);
       container.remove();
+    }
   };
   const row = document.createElement("div");
   row.className = "cmn-row";
@@ -236,68 +370,6 @@ function notify(opts) {
     timer = setTimeout(close, life);
   }
   return { close, el: toast };
-}
-var guardInstalled = false;
-function setActiveModal(handle) {
-  installPointerGuard();
-  dismissActiveModal();
-  getKit().activeModal = handle;
-}
-function dismissActiveModal() {
-  const kit = getKit();
-  const active = kit.activeModal;
-  if (!active)
-    return;
-  kit.activeModal = null;
-  try {
-    active.close();
-  } catch (e) {
-    console.warn("[comfy-modal-kit] active modal close() threw", e);
-  }
-}
-function getActiveModal() {
-  return getKit().activeModal;
-}
-function patchWidgetPointer(widget, opener) {
-  const original = widget.onPointerDown;
-  function patched(pointer, node, canvas) {
-    try {
-      if (typeof original === "function") {
-        const consumed = original.call(this, pointer, node, canvas);
-        if (consumed)
-          return consumed;
-      }
-      return opener(pointer, node, canvas);
-    } catch (e) {
-      console.warn("[comfy-modal-kit] patched onPointerDown threw", e);
-      return false;
-    }
-  }
-  widget.onPointerDown = patched;
-  return {
-    restore() {
-      widget.onPointerDown = original;
-    }
-  };
-}
-function installPointerGuard() {
-  if (guardInstalled)
-    return;
-  if (typeof window === "undefined")
-    return;
-  guardInstalled = true;
-  window.addEventListener("pointerdown", pointerGuard, true);
-}
-function pointerGuard(e) {
-  const active = getKit().activeModal;
-  if (!active)
-    return;
-  const target = e.target;
-  if (active.element && target && active.element.contains(target)) {
-    return;
-  }
-  e.stopImmediatePropagation();
-  dismissActiveModal();
 }
 function fuzzyScore(query, target) {
   if (!query)
@@ -623,6 +695,7 @@ function openModalShell(opts = {}) {
       backdrop.remove();
       dialog.remove();
       document.removeEventListener("keydown", onKey, true);
+      bodyEl.removeEventListener("scroll", onBodyScroll);
     } finally {
       try {
         opts.onClose?.();
@@ -656,6 +729,11 @@ function openModalShell(opts = {}) {
   };
   document.addEventListener("keydown", onKey, true);
   document.body.append(backdrop, dialog);
+  let liveScrollTop = 0;
+  const onBodyScroll = () => {
+    liveScrollTop = bodyEl.scrollTop;
+  };
+  bodyEl.addEventListener("scroll", onBodyScroll, { passive: true });
   const controller = {
     backdrop,
     dialog,
@@ -664,12 +742,18 @@ function openModalShell(opts = {}) {
     searchEl,
     statusEl,
     bodyEl,
+    scrollHost: bodyEl,
     footerEl,
     setBusy(b) {
       bodyEl.classList.toggle("is-busy", !!b);
     },
     setStatus(s) {
       statusEl.textContent = s || "";
+    },
+    getScrollTop() {
+      if (bodyEl.isConnected)
+        liveScrollTop = bodyEl.scrollTop;
+      return liveScrollTop;
     },
     close: requestClose,
     _onKey: onKey,
