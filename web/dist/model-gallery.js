@@ -1646,16 +1646,21 @@ function openPicker(widget, node) {
   const category = categoryForWidget(widget);
   if (!category)
     return;
+  let view = null;
   const modal = openModalShell({
     title: "Choose model",
     subtitle: `(${widget.name})`,
     placeholder: "Filter by name…",
     width: "min(1100px, calc(100vw - 16px))",
     height: "min(88vh, 820px)",
-    footerLeftHTML: "<kbd>Esc</kbd> close · tap a card to select",
-    footerRightHTML: ""
+    footerLeftHTML: "Tap a card to select · Close (or <kbd>Esc</kbd>) to dismiss",
+    footerRightHTML: "",
+    onClose: () => {
+      view?.destroy();
+      view = null;
+    }
   });
-  const view = createGallery({
+  view = createGallery({
     category,
     initialValue: (widget.value ?? "").toString(),
     searchEl: modal.searchEl,
@@ -1663,7 +1668,6 @@ function openPicker(widget, node) {
     setStatus: modal.setStatus,
     onSelect: (value) => {
       commitToWidget(widget, node, value);
-      view.destroy();
       modal.close();
     }
   });
@@ -2062,12 +2066,7 @@ var PICKER_CSS = `
 .mg-sum-triggers { margin-top: 0; }
 `;
 function ensureStyle() {
-  if (document.getElementById(STYLE_ID3))
-    return;
-  const s = document.createElement("style");
-  s.id = STYLE_ID3;
-  s.textContent = PICKER_CSS;
-  document.head.appendChild(s);
+  ensureStyleOnce(STYLE_ID3, PICKER_CSS);
 }
 try {
   app.registerExtension({
@@ -2232,6 +2231,7 @@ export {
   supportsCategory,
   subfolderChips,
   remapMatches,
+  openPicker,
   isComboWidget,
   categoryForWidget,
   basenameOf,
