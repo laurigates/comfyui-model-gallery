@@ -9,6 +9,7 @@ import {
   supportsCategory,
   topLevelSubfolder,
   WIDGET_CATEGORY,
+  widgetOptionsMatchListing,
 } from "../../src/model-gallery.ts";
 
 // modal-fuzzy is now consumed from @laurigates/comfy-modal-kit — one smoke
@@ -102,6 +103,43 @@ describe("isComboWidget", () => {
     expect(isComboWidget({ options: { values: "a" } })).toBe(false);
     expect(isComboWidget({})).toBe(false);
     expect(isComboWidget(null)).toBe(false);
+  });
+});
+
+describe("widgetOptionsMatchListing", () => {
+  const listing = new Set(["sd_xl_base_1.0.safetensors", "flux/flux1-dev.safetensors"]);
+
+  it("accepts a widget whose options come from the folder_paths listing", () => {
+    const w = { options: { values: ["sd_xl_base_1.0.safetensors", "flux/flux1-dev.safetensors"] } };
+    expect(widgetOptionsMatchListing(w, listing)).toBe(true);
+  });
+
+  it("accepts on partial overlap (a stale entry alongside real files)", () => {
+    const w = { options: { values: ["deleted.safetensors", "sd_xl_base_1.0.safetensors"] } };
+    expect(widgetOptionsMatchListing(w, listing)).toBe(true);
+  });
+
+  it("rejects a hardcoded option list that shares the widget name only", () => {
+    // ComfyUI-Frame-Interpolation's RIFE VFI node: `ckpt_name`, but its weights
+    // are the pack's own, not models/checkpoints.
+    const rife = { options: { values: ["rife47.pth", "rife49.pth", "rife426.pth"] } };
+    expect(widgetOptionsMatchListing(rife, listing)).toBe(false);
+  });
+
+  it("stays optimistic when the listing is unknown", () => {
+    const rife = { options: { values: ["rife47.pth", "rife49.pth"] } };
+    expect(widgetOptionsMatchListing(rife, null)).toBe(true);
+    expect(widgetOptionsMatchListing(rife, undefined)).toBe(true);
+  });
+
+  it("accepts a widget with no options to contradict the match", () => {
+    expect(widgetOptionsMatchListing({ options: { values: [] } }, listing)).toBe(true);
+    expect(widgetOptionsMatchListing({ options: {} }, listing)).toBe(true);
+    expect(widgetOptionsMatchListing(null, listing)).toBe(true);
+  });
+
+  it("tolerates non-string option values", () => {
+    expect(widgetOptionsMatchListing({ options: { values: [0.5, null, 1] } }, listing)).toBe(false);
   });
 });
 
