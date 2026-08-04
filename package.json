@@ -19,7 +19,7 @@
     "@comfyorg/comfyui-frontend-types": "^1.43.0",
     "jsdom": "^30.0.1",
     "knip": "^5.0.0",
-    "typescript": "^5.7.0",
+    "typescript": "^7.0.0",
     "vitest": "^4.1.7"
   }
 }
