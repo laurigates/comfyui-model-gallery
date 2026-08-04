@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.22](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.21...comfyui-model-gallery-v0.1.22) (2026-08-04)
+
+
+### Bug Fixes
+
+* **picker:** tear the gallery down on every exit path, not just selection ([#68](https://github.com/laurigates/comfyui-model-gallery/issues/68)) ([245e3d1](https://github.com/laurigates/comfyui-model-gallery/commit/245e3d1ec80173baf5f2c0d58706b8777c531024))
+
 ## [0.1.21](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.20...comfyui-model-gallery-v0.1.21) (2026-08-04)
 
 
