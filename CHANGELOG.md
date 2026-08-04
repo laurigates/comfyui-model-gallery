@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.20](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.19...comfyui-model-gallery-v0.1.20) (2026-08-04)
+
+
+### Bug Fixes
+
+* **deps:** bump @laurigates/comfy-modal-kit ^0.8.0 -&gt; ^0.10.0 ([d289518](https://github.com/laurigates/comfyui-model-gallery/commit/d28951858123f424f09e72372cf0a3bd0e07c126))
+* **deps:** bump @laurigates/comfy-modal-kit to ^0.10.0 (toast-tap dismisses modal) ([#63](https://github.com/laurigates/comfyui-model-gallery/issues/63)) ([d289518](https://github.com/laurigates/comfyui-model-gallery/commit/d28951858123f424f09e72372cf0a3bd0e07c126))
+
 ## [0.1.19](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.18...comfyui-model-gallery-v0.1.19) (2026-07-30)
 
 
