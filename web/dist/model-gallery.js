@@ -977,6 +977,36 @@ function categoryForWidget(w) {
 function isComboWidget(w) {
   return !!w && Array.isArray(w.options?.values);
 }
+var CATEGORY_NAMES = new Map;
+function rememberListing(category, items) {
+  CATEGORY_NAMES.set(category, new Set(items.map((i) => (i?.name ?? "").toString())));
+}
+var PRIMED_CATEGORIES = new Set;
+function primeCategory(category) {
+  if (PRIMED_CATEGORIES.has(category))
+    return;
+  PRIMED_CATEGORIES.add(category);
+  fetchListing(category).then((items) => rememberListing(category, items)).catch((e) => {
+    PRIMED_CATEGORIES.delete(category);
+    console.warn(`[${EXT_NAME2}] listing prime failed for ${category}`, e);
+  });
+}
+function widgetOptionsMatchListing(w, names) {
+  if (!names)
+    return true;
+  const values = w?.options?.values;
+  if (!Array.isArray(values) || values.length === 0)
+    return true;
+  return values.some((v) => names.has((v ?? "").toString()));
+}
+function handlesWidget(w) {
+  const category = categoryForWidget(w);
+  if (!category)
+    return false;
+  if (!isComboWidget(w))
+    return false;
+  return widgetOptionsMatchListing(w, CATEGORY_NAMES.get(category));
+}
 var SUPPORTED_CATEGORIES = new Set(WIDGET_CATEGORY.values());
 function supportsCategory(category) {
   return typeof category === "string" && SUPPORTED_CATEGORIES.has(category);
@@ -1557,6 +1587,7 @@ function createGallery(opts) {
     Promise.all([loadCorpus(), fetchListing(category)]).then(([, items]) => {
       state.items = items;
       state.chips = subfolderChips(items);
+      rememberListing(category, items);
       setStatus("");
     }).catch((e) => {
       console.warn(`[${EXT_NAME2}] list failed for ${category}`, e);
@@ -1685,13 +1716,15 @@ function refreshAllTooltips() {
 }
 function enhanceNode(node) {
   for (const w of node?.widgets ?? []) {
-    if (!categoryForWidget(w))
+    const category = categoryForWidget(w);
+    if (!category)
       continue;
     if (!isComboWidget(w))
       continue;
     if (w._modelGalleryPatched)
       continue;
     w._modelGalleryPatched = true;
+    primeCategory(category);
     try {
       refreshWidgetTooltip(w);
     } catch (e) {
@@ -1708,6 +1741,8 @@ function enhanceNode(node) {
       return r;
     };
     patchWidgetPointer(w, (_pointer, ownerNode) => {
+      if (!handlesWidget(w))
+        return false;
       openPicker(w, ownerNode || node);
       return true;
     });
@@ -2069,7 +2104,7 @@ try {
     priority: 10,
     match: (widget) => {
       const w = widget;
-      return categoryForWidget(w) !== null && isComboWidget(w);
+      return handlesWidget(w);
     },
     create: ({ widget, initialValue }) => {
       const w = widget;
@@ -2192,6 +2227,7 @@ try {
   console.warn(`[${EXT_NAME2}] model picker registration failed`, e);
 }
 export {
+  widgetOptionsMatchListing,
   topLevelSubfolder,
   supportsCategory,
   subfolderChips,
