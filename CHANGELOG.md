@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.21](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.20...comfyui-model-gallery-v0.1.21) (2026-08-04)
+
+
+### Bug Fixes
+
+* **picker:** only take over widgets whose options come from folder_paths ([#66](https://github.com/laurigates/comfyui-model-gallery/issues/66)) ([a896166](https://github.com/laurigates/comfyui-model-gallery/commit/a8961663ba0b69110566d96714d6f08c728a89e8))
+
 ## [0.1.20](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.19...comfyui-model-gallery-v0.1.20) (2026-08-04)
 
 
