@@ -9,7 +9,12 @@ ESM via `bun build` (see ADR-0001).
 A mobile-first ComfyUI usability pack: a frontend extension that intercepts a
 widget interaction (`widget.onPointerDown`, modern Vue frontend) and opens a
 touch-friendly HTML modal in place of a clunky native LiteGraph control.
-Widgets are matched **by name** (generic across node packs), the enhancement is
+Widgets are matched **by name** (generic across node packs) **and gated on the
+widget's own options** — a name alone is not proof the options come from
+`folder_paths` (RIFE VFI hardcodes `ckpt_name`), so takeover additionally
+requires the widget's `options.values` to overlap the listing; see
+`comfyui-plugin:comfyui-node-authoring` § "A widget name is not proof of its
+option source". The enhancement is
 **additive** (graceful fallback to the native control, never breaks serialized
 workflows), and the modal is **touch-first** (16px inputs to avoid iOS zoom,
 big tap targets, momentum scroll). The shared modal primitives
