@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.23](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.22...comfyui-model-gallery-v0.1.23) (2026-08-06)
+
+
+### Documentation
+
+* note the folder_paths gate in the vein paragraph ([#70](https://github.com/laurigates/comfyui-model-gallery/issues/70)) ([c476f71](https://github.com/laurigates/comfyui-model-gallery/commit/c476f71abd57cb2f4d5ea5d69ced04af62d0d73e))
+
 ## [0.1.22](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.21...comfyui-model-gallery-v0.1.22) (2026-08-04)
 
 
