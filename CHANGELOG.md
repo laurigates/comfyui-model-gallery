@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.24](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.23...comfyui-model-gallery-v0.1.24) (2026-08-16)
+
+
+### Miscellaneous
+
+* **ci:** guard registry-health against closing on Pending; drop duplicate Renovate runner ([#74](https://github.com/laurigates/comfyui-model-gallery/issues/74)) ([7cec388](https://github.com/laurigates/comfyui-model-gallery/commit/7cec3884044707494ec446eee6b476db845fd381))
+
 ## [0.1.23](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.22...comfyui-model-gallery-v0.1.23) (2026-08-06)
 
 
