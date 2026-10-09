@@ -2226,14 +2226,14 @@ try {
   console.warn(`[${EXT_NAME2}] model picker registration failed`, e);
 }
 export {
-  widgetOptionsMatchListing,
-  topLevelSubfolder,
-  supportsCategory,
-  subfolderChips,
-  remapMatches,
-  openPicker,
-  isComboWidget,
-  categoryForWidget,
+  WIDGET_CATEGORY,
   basenameOf,
-  WIDGET_CATEGORY
+  categoryForWidget,
+  isComboWidget,
+  openPicker,
+  remapMatches,
+  subfolderChips,
+  supportsCategory,
+  topLevelSubfolder,
+  widgetOptionsMatchListing
 };
