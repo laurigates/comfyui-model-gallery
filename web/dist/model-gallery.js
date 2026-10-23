@@ -12,7 +12,11 @@ function getKit() {
       activeModal: null,
       pointerClaim: null,
       modalChrome: [],
-      pointerGuardInstalled: false
+      pointerGuardInstalled: false,
+      hubEntries: [],
+      hubLauncherInstalled: false,
+      hubToggles: [],
+      safeViewListeners: []
     };
     g[KEY] = kit;
   }
@@ -22,6 +26,12 @@ function getKit() {
     kit.modelPickers = [];
   if (!kit.modalChrome)
     kit.modalChrome = [];
+  if (!kit.hubEntries)
+    kit.hubEntries = [];
+  if (!kit.hubToggles)
+    kit.hubToggles = [];
+  if (!kit.safeViewListeners)
+    kit.safeViewListeners = [];
   return kit;
 }
 function registerFieldProvider(provider) {
@@ -46,6 +56,27 @@ var SORT_OPTIONS = [
   { value: "rating:asc", label: "Lowest rating" }
 ];
 var VALID_SORTS = new Set(SORT_OPTIONS.map((o) => o.value));
+var IMG_EXTS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".bmp",
+  ".tiff",
+  ".tif",
+  ".avif"
+]);
+var VIDEO_EXTS = new Set([
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".mkv",
+  ".avi",
+  ".m4v",
+  ".mpg",
+  ".mpeg"
+]);
 var CHROME_ATTR = "data-cmp-chrome";
 function setActiveModal(handle) {
   installPointerGuard();
@@ -371,109 +402,6 @@ function notify(opts) {
   }
   return { close, el: toast };
 }
-function fuzzyScore(query, target) {
-  if (!query)
-    return { score: 0, matches: [] };
-  if (!target)
-    return null;
-  const q = query.toLowerCase();
-  const t = target.toLowerCase();
-  const matches = [];
-  let qi = 0;
-  let score = 0;
-  let consecutive = 0;
-  let prevMatchIdx = -1;
-  for (let ti = 0;ti < t.length && qi < q.length; ti++) {
-    if (t[ti] !== q[qi]) {
-      consecutive = 0;
-      continue;
-    }
-    let charScore = 1;
-    if (ti === 0) {
-      charScore += 5;
-    } else {
-      const prev = t[ti - 1];
-      const orig = target[ti];
-      if (prev === "_" || prev === "-" || prev === " " || prev === "." || prev === "/") {
-        charScore += 4;
-      } else if (prev !== undefined && prev >= "a" && prev <= "z" && orig !== undefined && orig >= "A" && orig <= "Z") {
-        charScore += 3;
-      }
-    }
-    if (ti === prevMatchIdx + 1) {
-      consecutive++;
-      charScore += consecutive * 2;
-    } else {
-      consecutive = 0;
-    }
-    score += charScore;
-    matches.push(ti);
-    prevMatchIdx = ti;
-    qi++;
-  }
-  if (qi < q.length)
-    return null;
-  score -= target.length * 0.01;
-  return { score, matches };
-}
-function fuzzyRank(query, fields, primaryWeight = 10) {
-  if (!query)
-    return { score: 0, primaryMatches: [] };
-  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length)
-    return { score: 0, primaryMatches: [] };
-  const primary = fields[0] || "";
-  const rest = fields.slice(1).filter((f) => Boolean(f));
-  let totalScore = 0;
-  const primaryMatchSet = new Set;
-  for (const token of tokens) {
-    const primaryResult = fuzzyScore(token, primary);
-    let best = primaryResult ? {
-      score: primaryResult.score * primaryWeight,
-      matches: primaryResult.matches,
-      onPrimary: true
-    } : null;
-    for (const field of rest) {
-      const r = fuzzyScore(token, field);
-      if (r && (!best || r.score > best.score)) {
-        best = { score: r.score, matches: r.matches, onPrimary: false };
-      }
-    }
-    if (!best)
-      return null;
-    totalScore += best.score;
-    if (best.onPrimary) {
-      for (const i of best.matches)
-        primaryMatchSet.add(i);
-    }
-  }
-  return {
-    score: totalScore,
-    primaryMatches: [...primaryMatchSet].sort((a, b) => a - b)
-  };
-}
-function highlightMatches(target, matchIndices) {
-  const frag = document.createDocumentFragment();
-  if (!target)
-    return frag;
-  const set = new Set(matchIndices || []);
-  if (!set.size) {
-    frag.appendChild(document.createTextNode(target));
-    return frag;
-  }
-  for (let i = 0;i < target.length; i++) {
-    const ch = target[i];
-    if (set.has(i)) {
-      const m = document.createElement("span");
-      m.className = "cmp-match";
-      m.textContent = ch;
-      frag.appendChild(m);
-    } else {
-      frag.appendChild(document.createTextNode(ch));
-    }
-  }
-  return frag;
-}
 var STYLE_ID2 = "cmp-shell-style";
 var CSS22 = `
 .cmp-backdrop {
@@ -534,8 +462,11 @@ var CSS22 = `
     color: #aaa;
     border: 1px solid #3a3a44;
     border-radius: 4px;
-    width: 36px;
-    height: 36px;
+    /* 44px, not 36: docs/modal-ux-drift-catalog.md:71 sets the family's D02
+       target at >=44px, and the Touch Tools chooser cannot credibly promise
+       >=44px rows while inheriting a 36px close control. */
+    width: 44px;
+    height: 44px;
     cursor: pointer;
     font-size: 20px;
     line-height: 1;
@@ -768,6 +699,109 @@ function openModalShell(opts = {}) {
   }
   return controller;
 }
+function fuzzyScore(query, target) {
+  if (!query)
+    return { score: 0, matches: [] };
+  if (!target)
+    return null;
+  const q = query.toLowerCase();
+  const t = target.toLowerCase();
+  const matches = [];
+  let qi = 0;
+  let score = 0;
+  let consecutive = 0;
+  let prevMatchIdx = -1;
+  for (let ti = 0;ti < t.length && qi < q.length; ti++) {
+    if (t[ti] !== q[qi]) {
+      consecutive = 0;
+      continue;
+    }
+    let charScore = 1;
+    if (ti === 0) {
+      charScore += 5;
+    } else {
+      const prev = t[ti - 1];
+      const orig = target[ti];
+      if (prev === "_" || prev === "-" || prev === " " || prev === "." || prev === "/") {
+        charScore += 4;
+      } else if (prev !== undefined && prev >= "a" && prev <= "z" && orig !== undefined && orig >= "A" && orig <= "Z") {
+        charScore += 3;
+      }
+    }
+    if (ti === prevMatchIdx + 1) {
+      consecutive++;
+      charScore += consecutive * 2;
+    } else {
+      consecutive = 0;
+    }
+    score += charScore;
+    matches.push(ti);
+    prevMatchIdx = ti;
+    qi++;
+  }
+  if (qi < q.length)
+    return null;
+  score -= target.length * 0.01;
+  return { score, matches };
+}
+function fuzzyRank(query, fields, primaryWeight = 10) {
+  if (!query)
+    return { score: 0, primaryMatches: [] };
+  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length)
+    return { score: 0, primaryMatches: [] };
+  const primary = fields[0] || "";
+  const rest = fields.slice(1).filter((f) => Boolean(f));
+  let totalScore = 0;
+  const primaryMatchSet = new Set;
+  for (const token of tokens) {
+    const primaryResult = fuzzyScore(token, primary);
+    let best = primaryResult ? {
+      score: primaryResult.score * primaryWeight,
+      matches: primaryResult.matches,
+      onPrimary: true
+    } : null;
+    for (const field of rest) {
+      const r = fuzzyScore(token, field);
+      if (r && (!best || r.score > best.score)) {
+        best = { score: r.score, matches: r.matches, onPrimary: false };
+      }
+    }
+    if (!best)
+      return null;
+    totalScore += best.score;
+    if (best.onPrimary) {
+      for (const i of best.matches)
+        primaryMatchSet.add(i);
+    }
+  }
+  return {
+    score: totalScore,
+    primaryMatches: [...primaryMatchSet].sort((a, b) => a - b)
+  };
+}
+function highlightMatches(target, matchIndices) {
+  const frag = document.createDocumentFragment();
+  if (!target)
+    return frag;
+  const set = new Set(matchIndices || []);
+  if (!set.size) {
+    frag.appendChild(document.createTextNode(target));
+    return frag;
+  }
+  for (let i = 0;i < target.length; i++) {
+    const ch = target[i];
+    if (set.has(i)) {
+      const m = document.createElement("span");
+      m.className = "cmp-match";
+      m.textContent = ch;
+      frag.appendChild(m);
+    } else {
+      frag.appendChild(document.createTextNode(ch));
+    }
+  }
+  return frag;
+}
 function registerModelPicker(picker) {
   const list = getKit().modelPickers;
   const i = list.findIndex((p) => p.id === picker.id);
@@ -777,6 +811,68 @@ function registerModelPicker(picker) {
     list.push(picker);
   }
 }
+var SAFE_VIEW_DEFAULT_KEYWORDS = "nsfw";
+var SAFE_VIEW_DEFAULTS = Object.freeze({
+  enabled: true,
+  keywords: Object.freeze([SAFE_VIEW_DEFAULT_KEYWORDS]),
+  hide: false,
+  blurNames: true,
+  matchPrompt: false
+});
+var SAFE_VIEW_BLUR_CLASS = "cmk-sv-blur";
+var SAFE_VIEW_SPOILER_CLASS = "cmk-sv-spoiler";
+var SAFE_VIEW_CSS = `
+.${SAFE_VIEW_BLUR_CLASS} {
+    /* Scale past the edges: a blurred element otherwise fades toward its own
+       border and leaks a readable silhouette of the content at the rim. */
+    filter: blur(18px);
+    transform: scale(1.08);
+}
+.${SAFE_VIEW_SPOILER_CLASS} {
+    /* A SOLID BLOCK, never a text blur — blurred text stays readable at small
+       sizes, which is exactly the size a phone grid renders names at. */
+    background: #3a3a44;
+    color: transparent;
+    border-radius: 3px;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+.cmk-sv-reveal {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 2;
+    /* >=34px is the family's per-card control floor. */
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    line-height: 1;
+    background: rgba(20, 20, 26, 0.82);
+    color: #e8e8ea;
+    border: 1px solid #4a4a58;
+    border-radius: 8px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.cmk-sv-reveal:hover {
+    background: rgba(40, 40, 52, 0.92);
+}
+`;
+var NATIVE_SCROLL_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End"
+]);
 
 // src/model-gallery.ts
 import { app } from "/scripts/app.js";
