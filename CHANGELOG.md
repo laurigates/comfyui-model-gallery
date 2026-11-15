@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.25](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.24...comfyui-model-gallery-v0.1.25) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** bump @laurigates/comfy-modal-kit to ^0.14.0 and rebuild web/dist ([#80](https://github.com/laurigates/comfyui-model-gallery/issues/80)) ([391b8bf](https://github.com/laurigates/comfyui-model-gallery/commit/391b8bfa1d094857934098ab0bca1c75be767206)), closes [#77](https://github.com/laurigates/comfyui-model-gallery/issues/77)
+
 ## [0.1.24](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.23...comfyui-model-gallery-v0.1.24) (2026-08-16)
 
 
