@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
-    "@comfyorg/comfyui-frontend-types": "^1.43.0",
+    "@comfyorg/comfyui-frontend-types": "^1.60.0",
     "jsdom": "^30.0.1",
     "knip": "^5.0.0",
     "typescript": "^5.7.0",
