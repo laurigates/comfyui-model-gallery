@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.26](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.25...comfyui-model-gallery-v0.1.26) (2026-11-16)
+
+
+### Bug Fixes
+
+* **types:** move @comfyorg/comfyui-frontend-types to ^1.60.0 ([#92](https://github.com/laurigates/comfyui-model-gallery/issues/92)) ([149d34f](https://github.com/laurigates/comfyui-model-gallery/commit/149d34f15bf4c32b730b9a459cc335c64d88feac))
+
 ## [0.1.25](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.24...comfyui-model-gallery-v0.1.25) (2026-10-23)
 
 
