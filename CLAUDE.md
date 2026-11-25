@@ -47,7 +47,7 @@ inlines the kit into the shipped bundle (formerly the vendored
 | `knip.json` | Dead-code / unused-dependency check config (entry: `src/model-gallery.ts`). |
 | `biome.json` | Biome (TS/JSON) linter + formatter config. |
 | `package.json` | Dev toolchain + the `@laurigates/comfy-modal-kit` runtime dep — `bun build`, `tsc`, Vitest, Biome, knip. |
-| `.github/workflows/` | `ci.yml` (ruff/biome/typecheck+build/pytest/vitest/knip/gitleaks), `publish.yml` (bun build then auto-publish on version bump), `release-please.yml`. |
+| `.github/workflows/` | `ci.yml` (ruff/biome/typecheck+build/pytest/vitest/knip/gitleaks), `publish.yml` (bun build then auto-publish on version bump), `release-please.yml`, `merge-method.yml` (posts the `merge-method` check and `merge:*` label via the shared reusable workflow). |
 | `tests/` | pytest backend suite. `tests/js/` Vitest suite for the pure TS helpers (imports `src/*.ts`). |
 | `justfile` | `lint`, `format`, `typecheck`, `build`, `knip`, `test`, `check` recipes — the local CI gate. |
 
