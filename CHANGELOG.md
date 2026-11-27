@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.27](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.26...comfyui-model-gallery-v0.1.27) (2026-11-26)
+
+
+### Bug Fixes
+
+* **deps:** update dependency playwright to v1.55.1 [security] ([#85](https://github.com/laurigates/comfyui-model-gallery/issues/85)) ([9db945d](https://github.com/laurigates/comfyui-model-gallery/commit/9db945df726b0f144146df637bc6fbf24de97f3b))
+
+
+### Miscellaneous
+
+* **claude:** reconcile Claude Code config with the repo baseline ([#89](https://github.com/laurigates/comfyui-model-gallery/issues/89)) ([1935c10](https://github.com/laurigates/comfyui-model-gallery/commit/1935c1044b46751f2327b820818338903c1ea7f0))
+* **deps:** update dependency virtualenv to v21.14.10 [security] ([#94](https://github.com/laurigates/comfyui-model-gallery/issues/94)) ([e1f3d77](https://github.com/laurigates/comfyui-model-gallery/commit/e1f3d7761fe65de1331f2e9e65349217a1fb66c9))
+
 ## [0.1.26](https://github.com/laurigates/comfyui-model-gallery/compare/comfyui-model-gallery-v0.1.25...comfyui-model-gallery-v0.1.26) (2026-11-16)
 
 
